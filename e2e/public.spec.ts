@@ -72,6 +72,18 @@ test("F-SEO oferta com preço tem dados estruturados válidos (Product/Offer)", 
   expect(found).toBe(true);
 });
 
+test("F-SHARE oferta tem prévia de compartilhamento (título com preço, imagem, canônico) e a imagem padrão existe", async ({ page, request }) => {
+  await page.goto("/");
+  const href = await page.locator('a[href^="/oferta/"]').first().getAttribute("href");
+  await page.goto(href!);
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", /.{10,}/);
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /^https?:\/\//);
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", new RegExp(`${href}$`));
+  const img = await request.get("/opengraph-image");
+  expect(img.status()).toBe(200);
+  expect(img.headers()["content-type"]).toContain("image/png");
+});
+
 test("F-BF hub da Black Friday mostra a contagem regressiva", async ({ page }) => {
   await page.goto("/black-friday");
   await expect(page.getByText(/Faltam \d+ dias para a Black Friday|começa amanhã|É hoje|passou/)).toBeVisible();

@@ -12,7 +12,7 @@ import { CommentSection } from "@/components/comments/comment-section";
 import { DealToolbar } from "@/components/deal-toolbar";
 import { isSubscribed, listComments } from "@/lib/data/comments";
 import { savedSet } from "@/lib/data/relations";
-import { isFuture } from "@/lib/format";
+import { formatPrice, isFuture } from "@/lib/format";
 import { DealGallery } from "@/components/deal-gallery";
 import { listDealGallery } from "@/lib/data/publish";
 import { supabaseEnabled } from "@/lib/supabase/server";
@@ -30,7 +30,19 @@ export async function generateMetadata({ params }: PageProps<"/oferta/[slug]">) 
   const { slug } = await params;
   const session = await getSession();
   const deal = await getDealBySlug(slug, session ? { id: session.userId, role: session.role } : null);
-  return { title: deal?.title ?? "Oferta não encontrada" };
+  if (!deal) return { title: "Oferta não encontrada" };
+  // Prévia ao compartilhar (WhatsApp, Telegram, redes): foto do produto, preço e loja.
+  const price = deal.priceCents != null ? formatPrice(deal.priceCents) : deal.couponCode ? `cupom ${deal.couponCode}` : null;
+  const description = [price, deal.store.name].filter(Boolean).join(" · ") + (deal.description ? `. ${deal.description.replace(/\s+/g, " ").slice(0, 140)}` : "");
+  const url = `/oferta/${deal.slug}`;
+  return {
+    title: deal.title,
+    description,
+    alternates: { canonical: url },
+    openGraph: { type: "website", url, title: price ? `${deal.title} por ${price}` : deal.title, description, images: [deal.imageUrl ? { url: deal.imageUrl, alt: deal.title } : "/opengraph-image"] },
+    twitter: { card: deal.imageUrl ? "summary_large_image" : "summary" },
+    robots: deal.status === "published" || deal.status === "expired" ? undefined : { index: false },
+  };
 }
 
 export default async function DealPage({ params, searchParams }: PageProps<"/oferta/[slug]">) {
@@ -40,26 +52,22 @@ export default async function DealPage({ params, searchParams }: PageProps<"/ofe
   const deal = await getDealBySlug(slug, session ? { id: session.userId, role: session.role } : null);
   if (!deal) notFound();
 
-  const history = supabaseEnabled() ? await getPriceHistory(deal.id).catch(() => []) : [];
-  // Ofertas parecidas (mesma categoria, as mais quentes) e dados do autor: só com o banco de verdade.
-  const [related, author, sameProduct] = supabaseEnabled()
-    ? await Promise.all([
-        listDeals({ viewerId: null, tab: "quentes", page: 1, categoryId: deal.category?.id }).then((r) => r.items.filter((d) => d.id !== deal.id).slice(0, 4)).catch(() => []),
-        deal.authorId ? getProfile(deal.authorId).catch(() => null) : Promise.resolve(null),
-        listSameProductDeals(deal.id).catch(() => []),
-      ])
-    : [[], null, []];
-  const jsonLd = dealJsonLd(deal, process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000");
+  const db = supabaseEnabled();
   const expired = deal.status === "expired";
   const live = deal.status === "published" || expired;
-  const [thread, subscribed] = live
-    ? await Promise.all([
-        listComments({ dealId: deal.id }, session?.userId ?? null, sp.ordem === "novos" ? "desc" : "asc"),
-        session ? isSubscribed(deal.id, session.userId) : Promise.resolve(false),
-      ])
-    : [null, false];
-  const saved = session ? (await savedSet(session.userId, [deal.id])).has(deal.id) : false;
-  const gallery = supabaseEnabled() ? await listDealGallery(deal.id) : [];
+  // Tudo de uma vez: cada consulta vai até o banco, e uma depois da outra a página levava mais de 1 segundo.
+  const [history, related, author, sameProduct, thread, subscribed, saved, gallery] = await Promise.all([
+    db ? getPriceHistory(deal.id).catch(() => []) : Promise.resolve([]),
+    // Ofertas parecidas (mesma categoria, as mais quentes) e dados do autor: só com o banco de verdade.
+    db ? listDeals({ viewerId: null, tab: "quentes", page: 1, categoryId: deal.category?.id }).then((r) => r.items.filter((d) => d.id !== deal.id).slice(0, 4)).catch(() => []) : Promise.resolve([]),
+    db && deal.authorId ? getProfile(deal.authorId).catch(() => null) : Promise.resolve(null),
+    db ? listSameProductDeals(deal.id).catch(() => []) : Promise.resolve([]),
+    live ? listComments({ dealId: deal.id }, session?.userId ?? null, sp.ordem === "novos" ? "desc" : "asc") : Promise.resolve(null),
+    live && session ? isSubscribed(deal.id, session.userId) : Promise.resolve(false),
+    session ? savedSet(session.userId, [deal.id]).then((set) => set.has(deal.id)) : Promise.resolve(false),
+    db ? listDealGallery(deal.id) : Promise.resolve([]),
+  ]);
+  const jsonLd = dealJsonLd(deal, process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000");
   const canClose = !!session && (session.userId === deal.authorId || session.role === "admin" || session.role === "moderator");
   return (
     <div className="mx-auto flex max-w-(--layout-max) flex-col gap-4 px-4 py-4">

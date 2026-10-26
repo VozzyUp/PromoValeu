@@ -11,6 +11,9 @@ import { getPrefs } from "@/lib/data/social";
 import { DEFAULT_PREFS } from "@/lib/prefs";
 import type { FeedTab } from "@/lib/types";
 
+// A página inicial abre com abas e filtros (?aba=...): para o Google é sempre o mesmo endereço.
+export const metadata = { alternates: { canonical: "/" } };
+
 const ALL_TABS: { id: FeedTab; label: string; loggedOnly?: boolean }[] = [
   { id: "paravoce", label: "Pra você", loggedOnly: true },
   { id: "quentes", label: "Mais quentes" },

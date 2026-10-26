@@ -12,7 +12,7 @@ import { Footer } from "@/components/footer";
 import type { MenuNotification } from "@/components/notifications-menu";
 import { getSession } from "@/lib/auth";
 import { newsletterAvailable } from "@/lib/data/newsletter";
-import { listCategories, listStores } from "@/lib/data";
+import { listCategories, listMenuStores } from "@/lib/data";
 import { getAdsSettings, getBrandSettings } from "@/lib/data/settings";
 import { countUnread, listNotifications } from "@/lib/data/social";
 import { timeAgo } from "@/lib/format";
@@ -27,6 +27,9 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { default: `${brand.siteName}: ofertas que valem a pena compartilhar`, template: `%s | ${brand.siteName}` },
     description: brand.description,
+    // Base dos links absolutos (prévia ao compartilhar, canônico). Sempre o endereço com www.
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+    openGraph: { siteName: brand.siteName, locale: "pt_BR", type: "website" },
   };
 }
 
@@ -43,11 +46,16 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       console.error("[layout] notificações indisponíveis", e);
     }
   }
-  const categories = (await listCategories().catch(() => [])).map((c) => ({ name: c.name, slug: c.slug }));
+  const [cats, stores, ads, brand, newsletter] = await Promise.all([
+    listCategories().catch(() => []),
+    listMenuStores().catch(() => []),
+    getAdsSettings(),
+    getBrandSettings(),
+    newsletterAvailable(),
+  ]);
+  const categories = cats.map((c) => ({ name: c.name, slug: c.slug }));
   // Lojas do menu "Cupons": só as ativas (as que o robô cria ficam em revisão até alguém aprovar).
-  const couponStores = (await listStores().catch(() => [])).filter((s) => s.status === "active").slice(0, 30).map((s) => ({ name: s.name, slug: s.slug }));
-  const ads = await getAdsSettings();
-  const brand = await getBrandSettings();
+  const couponStores = stores.filter((s) => s.status === "active").slice(0, 30).map((s) => ({ name: s.name, slug: s.slug }));
   return (
     <html lang="pt-BR" className={`${figtree.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col font-sans">
@@ -59,7 +67,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <SideRails />
             <main id="conteudo">{children}</main>
           </div>
-          <Footer notice={brand.commissionNotice} newsletter={await newsletterAvailable()} />
+          <Footer notice={brand.commissionNotice} newsletter={newsletter} />
           <BottomNav categories={categories} loggedIn={!!session} isStaff={session?.role === "admin" || session?.role === "moderator"} unread={unread} />
           <ConsentBanner />
           <AdScript />
