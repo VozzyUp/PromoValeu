@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   // Renderização dinâmica clássica na fase da fatia vertical; reavaliar cacheComponents depois.
   output: "standalone",
   poweredByHeader: false,
+  // Os testes (Playwright) abrem o site por 127.0.0.1; sem isto o modo de desenvolvimento bloqueia o JavaScript da página.
+  allowedDevOrigins: ["127.0.0.1"],
   // Cliente do Telegram (conta logada) abre conexões TCP próprias: fica fora do empacotamento do servidor.
   serverExternalPackages: ["telegram"],
   async headers() {

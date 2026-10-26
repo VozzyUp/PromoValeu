@@ -4,6 +4,7 @@ import { moderateDealAction } from "@/app/actions/moderate";
 import { formatPrice, timeAgo } from "@/lib/format";
 import { listPendingDeals } from "@/lib/data";
 import { requireModerator } from "@/lib/auth";
+import { SelectAll } from "@/components/admin/select-all";
 import { db } from "@/lib/supabase/db";
 import { supabaseEnabled } from "@/lib/supabase/server";
 
@@ -31,11 +32,11 @@ export default async function PanelPage() {
   return (
     <div className="mx-auto max-w-(--layout-max) px-4 py-8">
       <h1 className="text-xl font-bold">Fila de ofertas</h1>
-      <p className="mb-4 text-sm text-muted">{pending.length === 0 ? "Nada esperando aprovação." : `${pending.length} oferta(s) esperando aprovação.`}</p>
+      <p className="mb-4 text-sm text-muted">{pending.length === 0 ? "Nada esperando aprovação." : pending.length >= 100 ? "Mostrando as 100 mais antigas esperando aprovação." : `${pending.length} oferta(s) esperando aprovação.`}</p>
 
       {pending.length > 0 ? (
         <form id="batch" action={batchModerateAction} className="mb-4 flex flex-wrap items-center gap-2 rounded-card bg-bg p-3 shadow-card">
-          <span className="text-sm font-bold">Marcadas:</span>
+          <SelectAll form="batch" />
           <label htmlFor="batch-reason" className="sr-only">Motivo da recusa em lote</label>
           <input id="batch-reason" name="reason" placeholder="Motivo (para recusar)" className={`${small} w-56`} />
           <button type="submit" name="action" value="approve" className="h-10 rounded-pill bg-accent px-4 text-sm font-bold text-on-accent hover:bg-accent-hover">Aprovar marcadas</button>

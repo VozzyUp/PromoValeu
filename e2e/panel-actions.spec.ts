@@ -53,6 +53,23 @@ test.describe("ações do painel", () => {
     expect(errors.filter((e) => !/Failed to load resource/.test(e))).toEqual([]);
   });
 
+  test("M-1b fila: \"Marcar todas\" marca e desmarca todas as ofertas (sem enviar)", async ({ page }) => {
+    const errors = watch(page);
+    await page.goto("/painel");
+    const boxes = page.locator('main li input[type="checkbox"][name="ids"]');
+    test.skip((await boxes.count()) === 0, "fila vazia");
+    const all = page.getByRole("checkbox", { name: /Marcar todas/ });
+    await all.check();
+    await expect(page.locator('main li input[name="ids"]:not(:checked)')).toHaveCount(0);
+    await expect(page.getByText(`(${await boxes.count()} marcada`)).toBeVisible();
+    await all.uncheck();
+    await expect(page.locator('main li input[name="ids"]:checked')).toHaveCount(0);
+    await boxes.first().check();
+    await expect(page.getByText("(1 marcada)")).toBeVisible();
+    await boxes.first().uncheck();
+    expect(errors).toEqual([]);
+  });
+
   test("M-2 usuários: confiança e suspensão do tester, e o resultado é desfeito", async ({ page }) => {
     await page.goto("/painel/usuarios?q=tester");
     const row = page.locator("main li").filter({ hasText: "@tester" }).first();
