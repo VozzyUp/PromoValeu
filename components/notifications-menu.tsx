@@ -8,7 +8,7 @@ import { markNotificationsReadAction } from "@/app/actions/notifications";
 
 export type MenuNotification = { id: number; text: string; href: string; read: boolean; when: string };
 
-/** Buzón: painel com as últimas notificações. Abrir o painel marca tudo como lido. */
+/** Avisos: painel com as últimas notificações. Abrir o painel marca tudo como lido. */
 export function NotificationsMenu({ unread, items }: { unread: number; items: MenuNotification[] }) {
   const [seenFor, setSeenFor] = useState<number | null>(null);
   const count = seenFor === unread ? 0 : unread;
@@ -29,7 +29,7 @@ export function NotificationsMenu({ unread, items }: { unread: number; items: Me
           className="relative flex items-center gap-1.5 rounded-pill px-2 py-1.5 text-sm font-bold hover:bg-surface"
         >
           <Bell className="size-4" aria-hidden />
-          <span className="hidden lg:inline">Buzón</span>
+          <span className="hidden lg:inline">Avisos</span>
           {count > 0 ? (
             <span className="absolute -right-0.5 -top-0.5 grid min-w-4 place-items-center rounded-pill bg-accent px-1 text-[10px] font-bold leading-4 text-on-accent">
               {count > 9 ? "9+" : count}

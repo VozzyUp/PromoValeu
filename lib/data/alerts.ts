@@ -1,4 +1,4 @@
-// Alertas de oferta por palavra-chave (Supabase). O aviso chega pelo Buzón.
+// Alertas de oferta por palavra-chave (Supabase). O aviso chega pelo sininho de Avisos.
 import "server-only";
 import { db } from "../supabase/db";
 

@@ -32,7 +32,7 @@ export function AlertForm({ categories, initialKeyword = "" }: { categories: { i
         </Field>
       </div>
       {state?.error ? <FormMessage>{state.error}</FormMessage> : null}
-      {state?.ok ? <FormMessage tone="success">Alerta criado. Avisamos você no Buzón quando aparecer uma oferta assim.</FormMessage> : null}
+      {state?.ok ? <FormMessage tone="success">Alerta criado. Você recebe um aviso no sininho do topo quando aparecer uma oferta assim.</FormMessage> : null}
       <div><Button type="submit" loading={pending}>Criar alerta</Button></div>
     </form>
   );

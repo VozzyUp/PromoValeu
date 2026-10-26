@@ -37,7 +37,7 @@ export function PrefsForm({ section, prefs }: { section: Section; prefs: Prefs }
               ))}
             </fieldset>
           ))}
-          <p className="text-xs text-muted">Os avisos chegam no Buzón. O envio por e-mail ainda não está ativo.</p>
+          <p className="text-xs text-muted">Os avisos aparecem no sininho do topo do site. O envio por e-mail ainda não está ativo.</p>
         </>
       ) : null}
 

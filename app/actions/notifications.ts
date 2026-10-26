@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { markAllRead } from "@/lib/data/social";
 
-/** Chamada quando o painel do Buzón abre. */
+/** Chamada quando o painel de Avisos abre. */
 export async function markNotificationsReadAction(): Promise<void> {
   const session = await getSession();
   if (!session) return;

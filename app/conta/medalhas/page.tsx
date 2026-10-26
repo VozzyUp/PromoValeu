@@ -7,7 +7,7 @@ export const metadata = { title: "Medalhas" };
 export default async function BadgesPage() {
   const session = await requireUser("/conta/medalhas");
   try {
-    await syncBadges(session.userId); // grava as medalhas novas e avisa no Buzón
+    await syncBadges(session.userId); // grava as medalhas novas e avisa no sininho
   } catch (e) {
     console.error("[badges]", e);
   }

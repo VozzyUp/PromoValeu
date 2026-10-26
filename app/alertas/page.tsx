@@ -22,7 +22,7 @@ export default async function AlertsPage({ searchParams }: PageProps<"/alertas">
       <header>
         <h1 className="text-xl font-bold md:text-display">Que nenhuma oferta passe batido</h1>
         <p className="mt-2 text-muted">
-          Diga o que você quer e a gente avisa no Buzón quando aparecer uma oferta que combina. Você pode ter até {MAX_ALERTS} alertas.
+          Diga o que você quer e a gente avisa no sininho do topo quando aparecer uma oferta que combina. Você pode ter até {MAX_ALERTS} alertas.
         </p>
       </header>
 

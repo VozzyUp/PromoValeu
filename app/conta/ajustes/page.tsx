@@ -106,7 +106,7 @@ async function PrefsTab({ userId }: { userId: string }) {
 async function NotifyTab({ userId }: { userId: string }) {
   const prefs = await getPrefs(userId);
   return (
-    <Card title="O que avisar no Buzón"><PrefsForm section="notify" prefs={prefs} /></Card>
+    <Card title="Quando você quer ser avisado"><PrefsForm section="notify" prefs={prefs} /></Card>
   );
 }
 
