@@ -20,6 +20,7 @@ import { readAccountPosts, withAccount } from "./telegram-account";
 import { channelLabel } from "./parse-web";
 import { fetchPublicChannel } from "./telegram-web";
 import type { RawPost } from "./types";
+import { readWhatsappPosts } from "./whatsapp";
 
 const MAX_AGE_MS = 24 * 3600_000; // publicação mais velha que isso provavelmente já acabou
 const REPOST_DAYS = 14;
@@ -27,7 +28,7 @@ const COUPON_DAYS = 7;
 const IMAGE_MAX = 3 * 1024 * 1024;
 
 export type SourceRow = {
-  id: string; name: string; kind: "telegram_public" | "telegram_account"; target: string; active: boolean; category_id: string | null;
+  id: string; name: string; kind: "telegram_public" | "telegram_account" | "whatsapp_channel" | "whatsapp_group"; target: string; active: boolean; category_id: string | null;
   min_discount_bp: number; max_price_cents: number | null; block_words: string[]; per_run: number; take_coupons: boolean;
   auto_publish: boolean; last_message_id: number | null; target_title: string | null;
 };
@@ -67,6 +68,10 @@ export async function runSource(id: string): Promise<SourceStats> {
       const label = channelLabel(page);
       if (label !== src.target_title) await db().from("sources").update({ target_title: label }).eq("id", id);
       return await processPosts(src, page.posts, async (p) => (p.imageUrl && !offline() ? fetchImageBytes(p.imageUrl, IMAGE_MAX) : null));
+    }
+    if (src.kind === "whatsapp_channel" || src.kind === "whatsapp_group") {
+      const posts = await readWhatsappPosts(src.kind, src.target);
+      return await processPosts(src, posts, async () => null); // a foto vem da página da loja
     }
     return await withAccount(async (c) => {
       const { posts, photo } = await readAccountPosts(c, src.target, src.last_message_id, 40);

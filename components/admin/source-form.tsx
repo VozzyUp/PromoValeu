@@ -1,18 +1,25 @@
 "use client";
 import { useActionState, useState } from "react";
 import { useKeepForm } from "./use-keep-form";
-import { loadChatsAction, saveSourceAction, type ChatsState, type SourceState } from "@/app/actions/sources";
+import { loadChatsAction, loadWhatsappGroupsAction, saveSourceAction, type ChatsState, type GroupsState, type SourceState } from "@/app/actions/sources";
 
 const input = "h-10 w-full rounded-sm border border-border-input bg-bg px-2 text-sm";
 
 export type SourceValues = {
-  id?: string; name: string; kind: "telegram_public" | "telegram_account"; targetLabel: string; cron: string; categoryId: string;
+  id?: string; name: string; kind: "telegram_public" | "telegram_account" | "whatsapp_channel" | "whatsapp_group"; targetLabel: string; cron: string; categoryId: string;
   minDiscountPct: number; maxPrice: string; blockWords: string; perRun: number; takeCoupons: boolean; autoPublish: boolean; active: boolean;
 };
 
 export const NEW_SOURCE: SourceValues = {
   name: "", kind: "telegram_public", targetLabel: "", cron: "*/10 * * * *", categoryId: "", minDiscountPct: 0, maxPrice: "",
   blockWords: "", perRun: 15, takeCoupons: true, autoPublish: false, active: true,
+};
+
+const KIND_LABEL: Record<SourceValues["kind"], string> = {
+  telegram_public: "Canal público do Telegram",
+  telegram_account: "Conta do Telegram",
+  whatsapp_channel: "Canal do WhatsApp",
+  whatsapp_group: "Grupo do WhatsApp",
 };
 
 const FREQUENCIES = [
@@ -26,6 +33,7 @@ const FREQUENCIES = [
 export function SourceForm({ source, categories, accountConnected }: { source: SourceValues; categories: { id: string; name: string }[]; accountConnected: boolean }) {
   const [state, action, pending] = useActionState<SourceState, FormData>(saveSourceAction, undefined);
   const [chats, loadChats, loadingChats] = useActionState<ChatsState>(loadChatsAction, undefined);
+  const [groups, loadGroups, loadingGroups] = useActionState<GroupsState>(loadWhatsappGroupsAction, undefined);
   const [kind, setKind] = useState(source.kind);
   const submit = useKeepForm(action);
   const k = source.id ?? "new";
@@ -44,6 +52,16 @@ export function SourceForm({ source, categories, accountConnected }: { source: S
           </p>
         </form>
       ) : null}
+      {isNew && kind === "whatsapp_group" ? (
+        <form action={loadGroups} className="flex flex-wrap items-center gap-2">
+          <button type="submit" disabled={loadingGroups} className="h-9 rounded-pill border border-accent px-4 text-sm font-bold text-accent disabled:opacity-50">
+            {loadingGroups ? "Carregando…" : "Carregar os grupos do WhatsApp"}
+          </button>
+          <p role="status" className={`text-sm ${groups?.error ? "text-danger" : "text-muted"}`}>
+            {groups?.error ?? (groups?.groups ? `${groups.groups.length} grupos. O número da UAZAPI precisa estar no grupo.` : "O número conectado na UAZAPI precisa estar no grupo.")}
+          </p>
+        </form>
+      ) : null}
 
       <form onSubmit={submit} className="grid gap-3 md:grid-cols-2">
         {source.id ? <input type="hidden" name="id" value={source.id} /> : null}
@@ -57,15 +75,32 @@ export function SourceForm({ source, categories, accountConnected }: { source: S
             <select id={`sk-${k}`} name="kind" value={kind} onChange={(e) => setKind(e.target.value as SourceValues["kind"])} className={input}>
               <option value="telegram_public">Canal público (sem login)</option>
               <option value="telegram_account">Grupo ou canal da minha conta</option>
+              <option value="whatsapp_channel">Canal do WhatsApp</option>
+              <option value="whatsapp_group">Grupo do WhatsApp</option>
             </select>
           </div>
         ) : (
-          <p className="self-end text-sm text-muted">{source.kind === "telegram_public" ? "Canal público" : "Conta logada"}: <strong>{source.targetLabel}</strong></p>
+          <p className="self-end text-sm text-muted">{KIND_LABEL[source.kind]}: <strong>{source.targetLabel}</strong></p>
         )}
         {isNew && kind === "telegram_public" ? (
           <div className="md:col-span-2">
             <label htmlFor={`sc-${k}`} className="mb-1 block text-sm font-bold">Canal (@nome ou link t.me/nome)</label>
             <input id={`sc-${k}`} name="channel" required placeholder="@promocoesdodia" className={input} />
+          </div>
+        ) : null}
+        {isNew && kind === "whatsapp_channel" ? (
+          <div className="md:col-span-2">
+            <label htmlFor={`sw-${k}`} className="mb-1 block text-sm font-bold">Link do canal (no WhatsApp: abra o canal, toque no nome e em Compartilhar)</label>
+            <input id={`sw-${k}`} name="waChannel" required placeholder="https://whatsapp.com/channel/0029Va..." className={input} />
+          </div>
+        ) : null}
+        {isNew && kind === "whatsapp_group" ? (
+          <div className="md:col-span-2">
+            <label htmlFor={`swg-${k}`} className="mb-1 block text-sm font-bold">Grupo</label>
+            <select id={`swg-${k}`} name="waGroup" required className={input} defaultValue="">
+              <option value="" disabled>{groups?.groups ? "Escolha" : "Carregue a lista acima"}</option>
+              {(groups?.groups ?? []).map((g) => <option key={g.jid} value={`${g.jid}::${encodeURIComponent(g.name)}`}>{g.name}</option>)}
+            </select>
           </div>
         ) : null}
         {isNew && kind === "telegram_account" ? (

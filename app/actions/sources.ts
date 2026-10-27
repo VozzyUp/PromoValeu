@@ -8,10 +8,12 @@ import { channelLabel, normalizeChannel } from "@/lib/sources/parse-web";
 import { listAccountChats, logoutAccount, startLogin, submitCode, submitPassword, type AccountChat } from "@/lib/sources/telegram-account";
 import { fetchPublicChannel, type PublicChannel } from "@/lib/sources/telegram-web";
 import { db } from "@/lib/supabase/db";
+import { resolveChannel, whatsappGroups } from "@/lib/sources/whatsapp";
 
 export type SourceState = { ok?: boolean; error?: string } | undefined;
 export type LoginState = { ok?: boolean; error?: string; step?: "code" | "password" | "done" } | undefined;
 export type ChatsState = { chats?: AccountChat[]; error?: string } | undefined;
+export type GroupsState = { groups?: { jid: string; name: string }[]; error?: string } | undefined;
 
 const UUID = /^[0-9a-f-]{36}$/i;
 const ACCOUNT_TARGET = /^(channel:\d+:-?\d+|chat:\d+)$/;
@@ -61,6 +63,17 @@ export async function saveSourceAction(_prev: SourceState, form: FormData): Prom
       const [target, title] = String(form.get("chat") ?? "").split("::");
       if (!ACCOUNT_TARGET.test(target ?? "")) return { error: "Escolha o grupo ou canal na lista da conta." };
       Object.assign(row, { kind, target, target_title: decodeURIComponent(title ?? "").slice(0, 120) || null });
+    } else if (kind === "whatsapp_channel") {
+      try {
+        const ch = await resolveChannel(String(form.get("waChannel") ?? ""));
+        Object.assign(row, { kind, target: ch.jid, target_title: ch.name });
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : "Não consegui abrir o canal." };
+      }
+    } else if (kind === "whatsapp_group") {
+      const [target, title] = String(form.get("waGroup") ?? "").split("::");
+      if (!/^[\d-]+@g\.us$/.test(target ?? "")) return { error: "Escolha o grupo na lista." };
+      Object.assign(row, { kind, target, target_title: decodeURIComponent(title ?? "").slice(0, 120) || null });
     } else {
       return { error: "Escolha o tipo da fonte." };
     }
@@ -68,7 +81,7 @@ export async function saveSourceAction(_prev: SourceState, form: FormData): Prom
 
   const q = isNew ? db().from("sources").insert(row) : db().from("sources").update(row).eq("id", id);
   const { error } = await q;
-  if (error) return { error: error.code === "23505" ? "Essa fonte já está cadastrada." : error.code === "42P01" ? "Rode a migração 8 no Supabase antes." : error.message };
+  if (error) return { error: error.code === "23505" ? "Essa fonte já está cadastrada." : error.code === "42P01" ? "Rode a migração 8 no Supabase antes." : error.code === "23514" ? "Rode a migração 10 no Supabase antes (libera as fontes do WhatsApp)." : error.message };
   revalidatePath("/painel/fontes");
   return { ok: true };
 }
@@ -135,6 +148,16 @@ export async function loadChatsAction(): Promise<ChatsState> {
   await requireAdmin();
   try {
     return { chats: await listAccountChats() };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Não consegui listar os grupos." };
+  }
+}
+
+/** Grupos do WhatsApp em que o número da UAZAPI participa. */
+export async function loadWhatsappGroupsAction(): Promise<GroupsState> {
+  await requireAdmin();
+  try {
+    return { groups: await whatsappGroups() };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Não consegui listar os grupos." };
   }

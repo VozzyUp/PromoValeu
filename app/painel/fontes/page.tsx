@@ -65,11 +65,14 @@ export default async function PanelSourcesPage() {
   return (
     <div className="mx-auto flex max-w-(--layout-max) flex-col gap-6 px-4 py-8">
       <div>
-        <h1 className="text-xl font-bold">Fontes de ofertas (Telegram)</h1>
+        <h1 className="text-xl font-bold">Fontes de ofertas (Telegram e WhatsApp)</h1>
         <p className="text-sm text-muted">
           O robô lê os canais e grupos cadastrados, segue o link de cada oferta até a loja, tira o código de afiliado de quem publicou e
           monta a oferta com o link limpo. Sem “publicar direto”, tudo cai na <Link href="/painel" className="font-bold text-accent hover:underline">fila de ofertas</Link> para você aprovar.
           Publicações sem link de loja, repetidas ou fora dos filtros ficam listadas abaixo com o motivo.
+        </p>
+        <p className="mt-2 text-sm text-muted">
+          WhatsApp: usa o número conectado na integração da UAZAPI. Canais: cole o link do canal. Grupos: o número precisa estar no grupo.
         </p>
       </div>
 
