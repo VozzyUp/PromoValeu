@@ -71,3 +71,25 @@ export function priceRoseTwice(postedCents: number, lastTwoCheckedCents: number[
   if (lastTwoCheckedCents.length < 2) return false;
   return lastTwoCheckedCents.slice(0, 2).every((c) => c > postedCents * (1 + tolerance));
 }
+export type DealCoupon = { code: string | null; percent: number | null; amountCents: number | null };
+
+/**
+ * Preço da vitrine com o cupom da oferta aplicado.
+ * - percentual ou valor conhecido: aplica.
+ * - só o código: tenta o número no fim do código (ZAFADINHO10 = 10%) e só aceita se a conta bater com o preço da oferta (2%).
+ * known=false quando não deu para saber quanto o cupom desconta.
+ */
+export function priceWithCoupon(pageCents: number, coupon: DealCoupon, dealCents: number): { cents: number; known: boolean } {
+  if (!coupon.code && coupon.percent == null && coupon.amountCents == null) return { cents: pageCents, known: true };
+  if (coupon.percent != null && coupon.percent > 0 && coupon.percent < 100) return { cents: Math.round(pageCents * (1 - coupon.percent / 100)), known: true };
+  if (coupon.amountCents != null && coupon.amountCents > 0) return { cents: Math.max(0, pageCents - coupon.amountCents), known: true };
+  const digits = /(\d{1,2})$/.exec(coupon.code ?? "");
+  if (digits) {
+    const pct = Number(digits[1]);
+    if (pct >= 5 && pct <= 70) {
+      const cents = Math.round(pageCents * (1 - pct / 100));
+      if (Math.abs(cents - dealCents) <= dealCents * 0.02) return { cents, known: true };
+    }
+  }
+  return { cents: pageCents, known: false };
+}

@@ -1,7 +1,7 @@
 // Histórico de preço, selos de verificação e revalidação periódica das ofertas no ar. Só Supabase.
 import "server-only";
 import { fetchLinkInfo, fetchPreview } from "../link-preview";
-import { checkPrice, priceRoseTwice, type PricePoint } from "../price-check";
+import { checkPrice, priceRoseTwice, priceWithCoupon, type PricePoint } from "../price-check";
 import { mlQuote } from "../integrations/mercadolivre";
 import { parseMlUrl } from "../ml-url";
 import { mlAccessToken } from "./integrations";
@@ -119,10 +119,14 @@ export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
   };
   const cutoff = new Date(Date.now() - 6 * 3600_000).toISOString();
   const { data, error } = await db().from("deals")
-    .select("id, price_cents, url_submitted, url_resolved, listing:listings!deals_listing_id_fkey(id, checked_at)")
+    .select("id, price_cents, url_submitted, url_resolved, created_at, coupon_code, coupon_percent, coupon_amount_cents, listing:listings!deals_listing_id_fkey(id, checked_at)")
     .eq("status", "published").not("listing_id", "is", null).not("price_cents", "is", null).limit(300);
   if (error) throw error;
-  type R = { id: string; price_cents: number; url_submitted: string | null; url_resolved: string | null; listing: { id: string; checked_at: string | null } | null };
+  type R = {
+    id: string; price_cents: number; url_submitted: string | null; url_resolved: string | null; created_at: string;
+    coupon_code: string | null; coupon_percent: number | null; coupon_amount_cents: number | null;
+    listing: { id: string; checked_at: string | null } | null;
+  };
   const due = (data as unknown as R[])
     .filter((r) => r.listing && (!r.listing.checked_at || r.listing.checked_at < cutoff) && (r.url_resolved ?? r.url_submitted))
     .sort((a, b) => (a.listing!.checked_at ?? "").localeCompare(b.listing!.checked_at ?? ""))
@@ -167,7 +171,20 @@ export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
       const last = await db().from("price_snapshots").select("price_cents")
         .eq("listing_id", r.listing!.id).eq("source", "recheck").order("captured_at", { ascending: false }).limit(2);
       const lastTwo = ((last.data ?? []) as { price_cents: number }[]).map((s) => s.price_cents);
-      if (priceRoseTwice(r.price_cents, lastTwo)) {
+      // O preço da oferta pode ser com cupom: a vitrine maior não quer dizer que a oferta acabou.
+      const coupon = { code: r.coupon_code, percent: r.coupon_percent, amountCents: r.coupon_amount_cents };
+      const withCoupon = lastTwo.map((p) => priceWithCoupon(p, coupon, r.price_cents));
+      let rose: boolean;
+      if (withCoupon.every((x) => x.known)) {
+        rose = priceRoseTwice(r.price_cents, withCoupon.map((x) => x.cents));
+      } else {
+        // Cupom de valor desconhecido: compara a vitrine com a primeira vitrine lida depois da oferta.
+        const first = await db().from("price_snapshots").select("price_cents")
+          .eq("listing_id", r.listing!.id).eq("source", "recheck").gte("captured_at", r.created_at).order("captured_at").limit(1).maybeSingle();
+        const base = (first.data as { price_cents: number } | null)?.price_cents ?? null;
+        rose = base != null && priceRoseTwice(base, lastTwo);
+      }
+      if (rose) {
         await db().from("deals").update({ status: "expired", expired_reason: "O preço na loja subiu" }).eq("id", r.id);
         stats.expired++;
       } else {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkPrice, priceRoseTwice } from "../lib/price-check";
+import { checkPrice, priceRoseTwice, priceWithCoupon } from "../lib/price-check";
 
 const now = new Date("2026-11-10T12:00:00Z");
 const daysAgo = (d: number) => new Date(now.getTime() - d * 86400_000);
@@ -69,5 +69,23 @@ describe("checkPrice com o preço em outra loja", () => {
     const hist = [10, 6, 2].map((d) => ({ priceCents: 10000, at: new Date(now.getTime() - d * 86400_000) }));
     expect(checkPrice({ priceCents: 8000, listPriceCents: null, history: hist, now }).verdict).toBe("verified");
     expect(checkPrice({ priceCents: 8000, listPriceCents: null, history: hist, marketCents: 6000, now }).verdict).toBe("good_price");
+  });
+});
+
+describe("priceWithCoupon", () => {
+  const none = { code: null, percent: null, amountCents: null };
+  it("sem cupom: o preço da vitrine", () => {
+    expect(priceWithCoupon(199999, none, 179900)).toEqual({ cents: 199999, known: true });
+  });
+  it("percentual e valor conhecidos", () => {
+    expect(priceWithCoupon(200000, { code: "X", percent: 10, amountCents: null }, 180000).cents).toBe(180000);
+    expect(priceWithCoupon(200000, { code: "X", percent: null, amountCents: 5000 }, 195000).cents).toBe(195000);
+  });
+  it("KaBuM: ZAFADINHO10 explica R$ 1.999,99 -> R$ 1.799", () => {
+    expect(priceWithCoupon(199999, { code: "ZAFADINHO10", percent: null, amountCents: null }, 179900)).toEqual({ cents: 179999, known: true });
+  });
+  it("número do código que não fecha a conta: desconhecido", () => {
+    expect(priceWithCoupon(199999, { code: "BLACK10", percent: null, amountCents: null }, 150000).known).toBe(false);
+    expect(priceWithCoupon(199999, { code: "PROMOVALEU", percent: null, amountCents: null }, 179900).known).toBe(false);
   });
 });
