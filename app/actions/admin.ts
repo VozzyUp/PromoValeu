@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { classifyUncategorized } from "@/lib/data/auto-category";
 import { affiliateTemplateError } from "@/lib/affiliate";
 import { requireAdmin } from "@/lib/auth";
 import {
@@ -66,4 +68,12 @@ export async function unblockDomainAction(form: FormData) {
   const domain = String(form.get("domain") ?? "").trim().toLowerCase();
   if (HOST.test(domain)) await removeBlockedDomain(domain);
   revalidatePath("/painel/lojas");
+}
+
+/** Coloca categoria nas ofertas que estão sem (IA se ligada, senão regras por palavra). */
+export async function classifyDealsAction() {
+  await requireAdmin();
+  const r = await classifyUncategorized();
+  revalidatePath("/");
+  redirect(`/painel/ofertas?classificadas=${r.updated}&ia=${r.usedAi ? 1 : 0}`);
 }

@@ -2,6 +2,7 @@
 import "server-only";
 import { checkImage } from "../image-check";
 import { createDeal, createStoreForHost, listStores } from "../data";
+import { autoCategoryId } from "../data/auto-category";
 import { getIntegrationConfig } from "../data/integrations";
 import { notifyPublished, saveDealImages } from "../data/publish";
 import { trackNewDeal } from "../data/verification";
@@ -69,7 +70,7 @@ export async function runShopeeRule(ruleId: string): Promise<RobotStats> {
       const title = o.title.length > 140 ? `${o.title.slice(0, 137)}...` : o.title;
       const listPrice = o.discountPct > 0 && o.discountPct < 95 ? Math.round((o.priceCents * 100) / (100 - o.discountPct)) : null;
       const deal = await createDeal({
-        authorId, title, storeId: store.id, categoryId: rule.category_id, urlSubmitted: o.offerLink, urlKey: key,
+        authorId, title, storeId: store.id, categoryId: rule.category_id ?? (await autoCategoryId(title)), urlSubmitted: o.offerLink, urlKey: key,
         description: `${o.shopName ? `Vendido por ${o.shopName}. ` : ""}${o.sales} vendidos${o.rating ? `, nota ${o.rating.toFixed(1)}` : ""}.`,
         priceCents: o.priceCents, listPriceCents: listPrice, couponCode: null,
         publish: rule.auto_publish, source: "robot",

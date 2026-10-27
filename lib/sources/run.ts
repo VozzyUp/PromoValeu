@@ -3,6 +3,7 @@
 import "server-only";
 import { createDeal, createStoreForHost, listStores } from "../data";
 import { isHostBlocked } from "../data/admin";
+import { autoCategoryId } from "../data/auto-category";
 import { notifyPublished, saveDealImages } from "../data/publish";
 import { linkDealToProduct, trackNewDeal } from "../data/verification";
 import { formatPrice } from "../format";
@@ -178,7 +179,7 @@ async function processPosts(src: SourceRow, posts: RawPost[], postImage: (p: Raw
         item.title = title;
         const url = res.storeUrl?.toString() ?? `https://www.${store.domains[0] ?? host}/`;
         const deal = await createDeal({
-          authorId, title, description: [c.text, ...parsed.facts].filter(Boolean).join(" "), storeId: store.id, categoryId: src.category_id,
+          authorId, title, description: [c.text, ...parsed.facts].filter(Boolean).join(" "), storeId: store.id, categoryId: src.category_id ?? (await autoCategoryId(title)),
           urlSubmitted: url, urlKey: key, priceCents: null, listPriceCents: null, couponCode: c.code,
           couponKind: c.kind, couponPercent: c.percent, couponAmountCents: c.amountCents, publish: src.auto_publish, source: "robot",
         });
@@ -243,7 +244,7 @@ async function processPosts(src: SourceRow, posts: RawPost[], postImage: (p: Raw
       }
 
       const deal = await createDeal({
-        authorId, title: fit(title), description: parsed.facts.join(" "), storeId: store.id, categoryId: src.category_id,
+        authorId, title: fit(title), description: parsed.facts.join(" "), storeId: store.id, categoryId: src.category_id ?? (await autoCategoryId(title)),
         urlSubmitted: res.storeUrl.toString(), urlKey: key, priceCents, listPriceCents: list, couponCode: parsed.coupon?.code ?? null,
         publish: src.auto_publish && !unsureTitle, source: "robot",
       });

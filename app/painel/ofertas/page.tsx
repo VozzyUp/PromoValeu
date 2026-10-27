@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { classifyDealsAction } from "@/app/actions/admin";
 import { dealStaffAction } from "@/app/actions/staff";
 import { DealEditForm } from "@/components/admin/deal-edit-form";
 import { requireModerator } from "@/lib/auth";
@@ -38,6 +39,14 @@ export default async function PanelDealsPage({ searchParams }: PageProps<"/paine
           </select></div>
         <button type="submit" className="h-10 rounded-pill bg-accent px-5 text-sm font-bold text-on-accent">Filtrar</button>
         <Link href="/publicar/oferta" className="h-10 content-center rounded-pill border border-accent px-4 text-sm font-bold text-accent">Nova oferta manual</Link>
+      </form>
+      <form action={classifyDealsAction} className="mb-4 flex flex-wrap items-center gap-3 rounded-card bg-surface p-3">
+        <button type="submit" className="h-9 rounded-pill border border-accent px-4 text-sm font-bold text-accent">Classificar ofertas sem categoria</button>
+        <p role="status" className="text-sm text-muted">
+          {one(sp.classificadas)
+            ? `${one(sp.classificadas)} ofertas classificadas${one(sp.ia) === "1" ? " pela IA" : " pelas regras (ligue a IA em Integrações para usar a IA)"}.`
+            : "As novas já entram com categoria. Use para as que entraram antes."}
+        </p>
       </form>
       <ul className="flex flex-col gap-3">
         {items.length === 0 ? <li className="text-sm text-muted">Nada encontrado.</li> : null}
