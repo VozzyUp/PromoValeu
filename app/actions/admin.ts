@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { affiliateTemplateError } from "@/lib/affiliate";
 import { requireAdmin } from "@/lib/auth";
 import {
   LINK_MODES, STORE_STATUSES, USER_LINK_POLICIES,
@@ -37,8 +38,8 @@ export async function updateStoreAction(_prev: AdminState, form: FormData): Prom
   const logo = String(form.get("logoUrl") ?? "").trim();
   if (logo && !/^https:\/\/\S+$/.test(logo)) return { error: "O logo precisa ser um endereço https." };
   const template = String(form.get("affiliateTemplate") ?? "").trim();
-  if (template && !/^https:\/\/\S+$/.test(template)) return { error: "O modelo de link precisa começar com https://." };
-  if (template && !template.includes("{url}")) return { error: "O modelo de link precisa conter {url}, onde entra o endereço da oferta." };
+  const templateError = affiliateTemplateError(template);
+  if (templateError) return { error: templateError };
 
   await updateStore(id, {
     name, status, domains, logoUrl: logo || null, linkMode, userLinkPolicy, splitOwnerPct: split, affiliateTemplate: template || null,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { outboundUrl, withAffiliate } from "../lib/affiliate";
+import { affiliateTemplateError, outboundUrl, withAffiliate } from "../lib/affiliate";
 
 const AMZ = "https://www.amazon.com.br/dp/B0EXEMPLO1";
 
@@ -37,5 +37,18 @@ describe("outboundUrl", () => {
   });
   it("oferta sem link continua sem link", () => {
     expect(outboundUrl({ source: "robot", urlSubmitted: null }, tpl)).toBeNull();
+  });
+});
+
+describe("affiliateTemplateError", () => {
+  it("aceita os formatos usados no painel", () => {
+    for (const t of ["", "tag=PromoValeu-20", "matt_word=fernandoelemesmo02&matt_tool=46090184", "https://rede.exemplo/ir?to={url}", "{raw}?x=1"]) {
+      expect(affiliateTemplateError(t)).toBeNull();
+    }
+  });
+  it("recusa o que não é parâmetro nem link de rede", () => {
+    for (const t of ["PromoValeu-20", "tag = x", "http://rede/ir?to={url}", "https://rede/ir", "javascript:alert(1)//{url}"]) {
+      expect(affiliateTemplateError(t)).not.toBeNull();
+    }
   });
 });

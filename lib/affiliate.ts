@@ -40,3 +40,14 @@ export function outboundUrl(deal: Pick<Deal, "source" | "urlSubmitted">, templat
     return deal.urlSubmitted;
   }
 }
+
+/** Confere o modelo digitado no painel. Devolve a mensagem de erro, ou null se estiver certo. */
+export function affiliateTemplateError(template: string): string | null {
+  const t = template.trim();
+  if (!t) return null;
+  if (/\s/.test(t)) return "O código de afiliado não pode ter espaços.";
+  if (/^[?&]?[\w.-]+=/.test(t) && !t.includes("{")) return null; // parâmetros, ex.: tag=meuid-20
+  if (/^https:\/\//.test(t) && t.includes("{url}")) return null; // link de rede
+  if (t.startsWith("{raw}")) return null;
+  return "Use parâmetros (ex.: tag=SEU_ID-20) ou um link https:// com {url}.";
+}
