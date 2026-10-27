@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkPrice, priceRoseTwice, priceWithCoupon } from "../lib/price-check";
+import { checkPrice, paymentCondition, priceRoseTwice, priceWithCoupon } from "../lib/price-check";
 
 const now = new Date("2026-11-10T12:00:00Z");
 const daysAgo = (d: number) => new Date(now.getTime() - d * 86400_000);
@@ -87,5 +87,15 @@ describe("priceWithCoupon", () => {
   it("número do código que não fecha a conta: desconhecido", () => {
     expect(priceWithCoupon(199999, { code: "BLACK10", percent: null, amountCents: null }, 150000).known).toBe(false);
     expect(priceWithCoupon(199999, { code: "PROMOVALEU", percent: null, amountCents: null }, 179900).known).toBe(false);
+  });
+});
+
+describe("paymentCondition", () => {
+  it("reconhece Pix, à vista e app", () => {
+    expect(paymentCondition("Preço no Pix.")).toBe(true);
+    expect(paymentCondition("Preço à vista.")).toBe(true);
+    expect(paymentCondition("Preço válido no aplicativo da loja.")).toBe(true);
+    expect(paymentCondition("Frete grátis informado na publicação.")).toBe(false);
+    expect(paymentCondition(null)).toBe(false);
   });
 });

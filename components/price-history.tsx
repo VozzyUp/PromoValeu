@@ -2,7 +2,7 @@ import { formatPrice } from "@/lib/format";
 import type { HistoryPoint } from "@/lib/data/verification";
 
 /** Linha simples do preço ao longo do tempo, com mínimo e máximo. Sem biblioteca de gráfico. */
-export function PriceHistory({ points }: { points: HistoryPoint[] }) {
+export function PriceHistory({ points, storeOnly = false }: { points: HistoryPoint[]; storeOnly?: boolean }) {
   if (points.length < 2) return null;
   const W = 600, H = 120, P = 8;
   const t0 = new Date(points[0].at).getTime();
@@ -16,7 +16,11 @@ export function PriceHistory({ points }: { points: HistoryPoint[] }) {
   return (
     <section aria-labelledby="hist-title" className="rounded-card bg-bg p-4 shadow-card md:p-6">
       <h2 id="hist-title" className="text-title font-bold">Histórico de preço</h2>
-      <p className="mb-3 text-sm text-muted">Preços que registramos neste anúncio nos últimos {days} dia(s).</p>
+      <p className="mb-3 text-sm text-muted">
+        {storeOnly
+          ? `Preço normal na loja nos últimos ${days} dia(s), sem cupom nem desconto do Pix. O preço desta oferta vale com a condição informada.`
+          : `Preços que registramos neste anúncio nos últimos ${days} dia(s).`}
+      </p>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" className="h-32 w-full" aria-label={`Preço entre ${formatPrice(lo)} e ${formatPrice(hi)}`}>
         <path d={d} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinejoin="round" />
         {points.map((p, i) => <circle key={i} cx={x(new Date(p.at).getTime())} cy={y(p.priceCents)} r="3" fill="var(--color-accent)" />)}

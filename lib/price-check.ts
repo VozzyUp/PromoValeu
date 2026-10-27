@@ -93,3 +93,8 @@ export function priceWithCoupon(pageCents: number, coupon: DealCoupon, dealCents
   }
   return { cents: pageCents, known: false };
 }
+
+/** Preço da oferta depende de forma de pagamento (Pix, à vista, só no app)? A API e a página da loja mostram o preço normal. */
+export function paymentCondition(description: string | null | undefined): boolean {
+  return /\bpix\b|[àa] vista|no aplicativo|no app\b|pelo app\b/i.test(description ?? "");
+}

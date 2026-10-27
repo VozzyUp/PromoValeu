@@ -1,7 +1,7 @@
 // Histórico de preço, selos de verificação e revalidação periódica das ofertas no ar. Só Supabase.
 import "server-only";
 import { fetchLinkInfo, fetchPreview } from "../link-preview";
-import { checkPrice, priceRoseTwice, priceWithCoupon, type PricePoint } from "../price-check";
+import { checkPrice, paymentCondition, priceRoseTwice, priceWithCoupon, type PricePoint } from "../price-check";
 import { mlQuote } from "../integrations/mercadolivre";
 import { parseMlUrl } from "../ml-url";
 import { mlAccessToken } from "./integrations";
@@ -36,12 +36,13 @@ export async function addSnapshot(listingId: string, priceCents: number, source:
 
 type DealForCheck = {
   id: string; price_cents: number | null; list_price_cents: number | null; listing_id: string | null; created_at: string;
+  description: string | null; coupon_code: string | null;
 };
 
 /** Reavalia o selo da oferta com o histórico do anúncio e guarda o resultado. */
 export async function verifyDeal(dealId: string): Promise<string | null> {
   const { data, error } = await db().from("deals")
-    .select("id, price_cents, list_price_cents, listing_id, created_at").eq("id", dealId).maybeSingle();
+    .select("id, price_cents, list_price_cents, listing_id, created_at, description, coupon_code").eq("id", dealId).maybeSingle();
   if (error) throw error;
   const d = data as DealForCheck | null;
   if (!d || d.price_cents == null || !d.listing_id) return null;
@@ -57,7 +58,15 @@ export async function verifyDeal(dealId: string): Promise<string | null> {
     .map((s) => ({ priceCents: s.price_cents, at: new Date(s.captured_at) }));
 
   const market = await marketReference(d.listing_id).catch(() => ({ cents: null, stores: 0 }));
-  const r = checkPrice({ priceCents: d.price_cents, listPriceCents: d.list_price_cents, history, marketCents: market.cents });
+  // Oferta com cupom ou Pix: o desconto da condição vale sempre. O selo avalia o preço normal da loja (o último lido)
+  // contra o histórico dela, para não chamar de "desconto conferido" o que é só o desconto do Pix.
+  let evalPrice = d.price_cents;
+  let evalHistory = history;
+  if ((d.coupon_code || paymentCondition(d.description)) && history.length > 0) {
+    evalPrice = history[history.length - 1].priceCents;
+    evalHistory = history.slice(0, -1);
+  }
+  const r = checkPrice({ priceCents: evalPrice, listPriceCents: d.list_price_cents, history: evalHistory, marketCents: market.cents });
   const ev = await db().from("verifications").insert({
     deal_id: d.id, verdict: r.verdict, price_cents: d.price_cents, reference_price_cents: r.referenceCents,
     real_discount_bp: r.realDiscountBp, stores_compared: 1 + market.stores, history_days: r.historyDays,
@@ -96,15 +105,24 @@ export async function trackNewDeal(o: { dealId: string; storeId: string; urlKey:
 
 export type HistoryPoint = { at: string; priceCents: number };
 
-export async function getPriceHistory(dealId: string): Promise<HistoryPoint[]> {
-  const d = await db().from("deals").select("listing_id").eq("id", dealId).maybeSingle();
-  const listingId = (d.data as { listing_id: string | null } | null)?.listing_id;
-  if (!listingId) return [];
+/**
+ * Preços registrados do anúncio. Se a oferta tem condição (cupom, Pix, à vista, app), o preço dela não entra:
+ * o gráfico mostra só o preço normal lido na loja, para não parecer que o preço subiu.
+ */
+export async function getPriceHistory(dealId: string): Promise<{ points: HistoryPoint[]; storeOnly: boolean }> {
+  const d = await db().from("deals").select("listing_id, description, coupon_code, created_at").eq("id", dealId).maybeSingle();
+  const deal = d.data as { listing_id: string | null; description: string | null; coupon_code: string | null; created_at: string } | null;
+  if (!deal?.listing_id) return { points: [], storeOnly: false };
+  const storeOnly = !!deal.coupon_code || paymentCondition(deal.description);
   const since = new Date(Date.now() - 90 * 86400_000).toISOString();
   const { data, error } = await db().from("price_snapshots")
-    .select("price_cents, captured_at").eq("listing_id", listingId).gte("captured_at", since).order("captured_at");
+    .select("price_cents, captured_at, source").eq("listing_id", deal.listing_id).gte("captured_at", since).order("captured_at");
   if (error) throw error;
-  return (data as { price_cents: number; captured_at: string }[]).map((s) => ({ at: s.captured_at, priceCents: s.price_cents }));
+  const postedAt = new Date(deal.created_at).getTime() - 60_000;
+  const points = (data as { price_cents: number; captured_at: string; source: string }[])
+    .filter((s) => !storeOnly || !((s.source === "post" || s.source === "robot") && new Date(s.captured_at).getTime() >= postedAt))
+    .map((s) => ({ at: s.captured_at, priceCents: s.price_cents }));
+  return { points, storeOnly };
 }
 
 export type RecheckStats = { checked: number; updated: number; expired: number; failed: number; reasons?: string[] };
@@ -119,11 +137,11 @@ export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
   };
   const cutoff = new Date(Date.now() - 6 * 3600_000).toISOString();
   const { data, error } = await db().from("deals")
-    .select("id, price_cents, url_submitted, url_resolved, created_at, coupon_code, coupon_percent, coupon_amount_cents, listing:listings!deals_listing_id_fkey(id, checked_at)")
+    .select("id, price_cents, url_submitted, url_resolved, created_at, description, coupon_code, coupon_percent, coupon_amount_cents, listing:listings!deals_listing_id_fkey(id, checked_at)")
     .eq("status", "published").not("listing_id", "is", null).not("price_cents", "is", null).limit(300);
   if (error) throw error;
   type R = {
-    id: string; price_cents: number; url_submitted: string | null; url_resolved: string | null; created_at: string;
+    id: string; price_cents: number; url_submitted: string | null; url_resolved: string | null; created_at: string; description: string | null;
     coupon_code: string | null; coupon_percent: number | null; coupon_amount_cents: number | null;
     listing: { id: string; checked_at: string | null } | null;
   };
@@ -175,10 +193,11 @@ export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
       const coupon = { code: r.coupon_code, percent: r.coupon_percent, amountCents: r.coupon_amount_cents };
       const withCoupon = lastTwo.map((p) => priceWithCoupon(p, coupon, r.price_cents));
       let rose: boolean;
-      if (withCoupon.every((x) => x.known)) {
+      // Preço no Pix, à vista ou só no app não aparece na loja nem na API: aí vale comparar a loja com ela mesma.
+      if (withCoupon.every((x) => x.known) && !paymentCondition(r.description)) {
         rose = priceRoseTwice(r.price_cents, withCoupon.map((x) => x.cents));
       } else {
-        // Cupom de valor desconhecido: compara a vitrine com a primeira vitrine lida depois da oferta.
+        // Cupom de valor desconhecido ou condição de pagamento: compara a vitrine com a primeira vitrine lida depois da oferta.
         const first = await db().from("price_snapshots").select("price_cents")
           .eq("listing_id", r.listing!.id).eq("source", "recheck").gte("captured_at", r.created_at).order("captured_at").limit(1).maybeSingle();
         const base = (first.data as { price_cents: number } | null)?.price_cents ?? null;

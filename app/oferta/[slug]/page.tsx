@@ -57,7 +57,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/ofe
   const live = deal.status === "published" || expired;
   // Tudo de uma vez: cada consulta vai até o banco, e uma depois da outra a página levava mais de 1 segundo.
   const [history, related, author, sameProduct, thread, subscribed, saved, gallery] = await Promise.all([
-    db ? getPriceHistory(deal.id).catch(() => []) : Promise.resolve([]),
+    db ? getPriceHistory(deal.id).catch(() => ({ points: [], storeOnly: false })) : Promise.resolve({ points: [], storeOnly: false }),
     // Ofertas parecidas (mesma categoria, as mais quentes) e dados do autor: só com o banco de verdade.
     db ? listDeals({ viewerId: null, tab: "quentes", page: 1, categoryId: deal.category?.id }).then((r) => r.items.filter((d) => d.id !== deal.id).slice(0, 4)).catch(() => []) : Promise.resolve([]),
     db && deal.authorId ? getProfile(deal.authorId).catch(() => null) : Promise.resolve(null),
@@ -149,7 +149,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/ofe
         </section>
       ) : null}
 
-      <PriceHistory points={history} />
+      <PriceHistory points={history.points} storeOnly={history.storeOnly} />
 
       <AdSlot minHeight={120} />
 
