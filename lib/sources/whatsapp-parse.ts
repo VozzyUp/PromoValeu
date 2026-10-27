@@ -84,10 +84,10 @@ export function groupPosts(messages: GroupMessage[]): RawPost[] {
   return out.sort((a, b) => a.id - b.id);
 }
 
-/** Chave do convite em "https://whatsapp.com/channel/0029Va..." (ou a própria chave). */
+/** Chave do convite em "https://whatsapp.com/channel/0029Va..." (também no meio de um texto, ou a própria chave). */
 export function channelInviteKey(input: string): string | null {
   const s = input.trim();
-  const m = /^(?:https?:\/\/)?(?:www\.)?whatsapp\.com\/channel\/([A-Za-z0-9_-]{10,})/i.exec(s);
+  const m = /(?:https?:\/\/)?(?:www\.)?whatsapp\.com\/channel\/([A-Za-z0-9_-]{10,})/i.exec(s); // o link pode vir no meio do texto de compartilhar
   if (m) return m[1];
   return /^[A-Za-z0-9_-]{16,40}$/.test(s) && /[A-Za-z]/.test(s) ? s : null;
 }

@@ -72,6 +72,8 @@ describe("identificação do canal", () => {
   it("lê a chave do link de convite e o JID digitado", () => {
     expect(channelInviteKey("https://whatsapp.com/channel/0029VaExemploChave123")).toBe("0029VaExemploChave123");
     expect(channelInviteKey("https://www.whatsapp.com/channel/0029VaExemploChave123/150")).toBe("0029VaExemploChave123");
+    expect(channelInviteKey('Siga o canal "PromoValeu – Ofertas" no WhatsApp: https://whatsapp.com/channel/0029VbE0s7vJZg40RfkIEj1L'))
+      .toBe("0029VbE0s7vJZg40RfkIEj1L");
     expect(channelInviteKey("@promocoes")).toBeNull();
     expect(channelJid("120363123456789012@newsletter")).toBe("120363123456789012@newsletter");
     expect(channelJid("120363123456789012")).toBe("120363123456789012@newsletter");

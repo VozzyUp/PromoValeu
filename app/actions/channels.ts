@@ -18,7 +18,7 @@ export async function saveChannelAction(_prev: ChannelState, form: FormData): Pr
   const name = String(form.get("name") ?? "").trim();
   if (name.length < 2 || name.length > 60) return { error: "Dê um nome de 2 a 60 caracteres." };
   const type = form.get("type") === "whatsapp" ? "whatsapp" : "telegram";
-  let target = String(form.get("target") ?? "").trim().slice(0, 120);
+  let target = String(form.get("target") ?? "").trim().slice(0, 600);
   if (!target) return { error: type === "telegram" ? "Informe o canal, como @meucanal ou o id numérico." : "Informe o link do canal, o número ou o id do grupo." };
   // Canal do WhatsApp: o link de convite vira o id interno (1203...@newsletter).
   if (type === "whatsapp" && /whatsapp\.com\/channel\//i.test(target) && channelInviteKey(target)) {
@@ -28,6 +28,7 @@ export async function saveChannelAction(_prev: ChannelState, form: FormData): Pr
       return { error: e instanceof Error ? e.message : "Não consegui abrir o canal." };
     }
   }
+  target = target.slice(0, 120);
   const minVerdict = ["any", "verified", "good_price"].includes(String(form.get("minVerdict"))) ? String(form.get("minVerdict")) : "any";
   const discount = Number(String(form.get("minDiscountPct") ?? "").replace(",", "."));
   const perHour = Number(form.get("maxPerHour"));
