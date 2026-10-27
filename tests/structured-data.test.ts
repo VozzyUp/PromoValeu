@@ -8,6 +8,17 @@ const base = {
 } as unknown as DealView;
 
 describe("dealJsonLd", () => {
+  it("traz início da oferta, frete e a política de 7 dias do CDC", () => {
+    const o = dealJsonLd({ ...base, publishedAt: "2026-10-20T10:00:00Z", shippingCents: 0 }, "https://site.com")!.offers as Record<string, unknown>;
+    expect(o.validFrom).toBe("2026-10-20T10:00:00Z");
+    expect((o.shippingDetails as { shippingRate: { value: string } }).shippingRate.value).toBe("0.00");
+    expect((o.hasMerchantReturnPolicy as { merchantReturnDays: number }).merchantReturnDays).toBe(7);
+  });
+  it("sem frete conhecido não inventa frete; oferta em loja física não leva política de devolução", () => {
+    const o = dealJsonLd({ ...base, availability: "offline" }, "https://site.com")!.offers as Record<string, unknown>;
+    expect(o.shippingDetails).toBeUndefined();
+    expect(o.hasMerchantReturnPolicy).toBeUndefined();
+  });
   it("monta Product e Offer com preço em reais com duas casas", () => {
     const d = dealJsonLd(base, "https://site.com/")!;
     const o = d.offers as Record<string, string>;
