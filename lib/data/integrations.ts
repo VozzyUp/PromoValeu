@@ -159,8 +159,15 @@ export async function mlAccessToken(): Promise<string | null> {
   if (!row?.enabled) return null;
   const s = secretsOf(row);
   const clientId = row.public_config.clientId;
-  if (!clientId || !s.clientSecret || !s.refreshToken) return null;
-  if (s.accessToken && Number(s.expiresAt) > Date.now()) return s.accessToken;
+  if (!clientId || !s.clientSecret || !s.accessToken) return null;
+  if (Number(s.expiresAt) > Date.now()) return s.accessToken;
+  if (!s.refreshToken) {
+    // Sem "offline_access" no app o Mercado Livre não manda a chave de renovação: a conexão vale 6 horas.
+    await db().from("integrations").update({
+      status: "error", last_error: "A conexão venceu. Ative a permissão offline_access no app do Mercado Livre e clique em Conectar de novo.",
+    }).eq("key", "mercadolivre");
+    return null;
+  }
   // A renovação usa a chave de renovação uma vez só: duas renovações ao mesmo tempo quebrariam a conexão.
   refreshing ??= refreshTokens({ clientId, clientSecret: s.clientSecret, refreshToken: s.refreshToken })
     .then(async (t) => {
