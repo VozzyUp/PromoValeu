@@ -210,6 +210,8 @@ async function processPosts(src: SourceRow, posts: RawPost[], postImage: (p: Raw
       const pageTitle = cleanPageTitle(preview?.title);
       // Linha com cara forte de nome de produto ganha; se a publicação só tem chamada, vale o título da página da loja.
       const title = parsed.title && parsed.titleScore >= 3 ? parsed.title : pageTitle ?? parsed.title;
+      // Sem nome confiável (a loja não mostrou a página e o texto só tem chamada): vai para a fila mesmo com "publicar direto".
+      const unsureTitle = !pageTitle && parsed.titleScore < 2;
       item.title = title;
       item.price_cents = priceCents;
       if (priceCents == null) {
@@ -243,7 +245,7 @@ async function processPosts(src: SourceRow, posts: RawPost[], postImage: (p: Raw
       const deal = await createDeal({
         authorId, title: fit(title), description: parsed.facts.join(" "), storeId: store.id, categoryId: src.category_id,
         urlSubmitted: res.storeUrl.toString(), urlKey: key, priceCents, listPriceCents: list, couponCode: parsed.coupon?.code ?? null,
-        publish: src.auto_publish, source: "robot",
+        publish: src.auto_publish && !unsureTitle, source: "robot",
       });
       stats.created++;
 

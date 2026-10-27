@@ -38,7 +38,7 @@ export function cleanLine(s: string): string {
     .trim();
 }
 
-const NOISE = /\b(oferta|ofertas|promo[çc][aã]o|promo|exclusiv\w*|aten[çc][aã]o|corr[ae]|aproveit\w*|imperd[ií]ve\w*|baixou|menor pre[çc]o|hist[oó]ric\w*|rel[aâ]mpago|frete|link|compre|clique|seja prime|membros|grupo|canal|estoque|acabando|urgente|desconto|achadinh\w*|off|resgate|vai sair|novo cupom|cupom|app)\b/i;
+const NOISE = /\b(oferta|ofertas|promo[çc][aã]o|promo|exclusiv\w*|aten[çc][aã]o|corr[ae]|aproveit\w*|imperd[ií]ve\w*|baixou|menor pre[çc]o|hist[oó]ric\w*|rel[aâ]mpago|frete|link|compre|clique|seja prime|membros|grupo|canal|estoque|acabando|urgente|desconto|achadinh\w*|off|resgate|vai sair|novo cupom|cupom|app|coment[aá]rios?|d[uú]vidas?|deixe|siga|participe|entre no|chame|avalia[çc][aã]o)\b/i;
 const SPEC = /\b\d+(?:[.,]\d+)?\s?(gb|tb|mb|kg|g|mg|ml|l|w|mah|hz|pol|polegadas|cm|mm|m|v|un|unidades|pe[çc]as)\b|\b\d{2,3}["”]|\b[A-Z]{1,6}-?\d{2,}[A-Z0-9-]*\b|\b(4k|8k|full ?hd|ssd|bivolt|wi-?fi|bluetooth|usb|led|oled)\b/i;
 
 /**
@@ -76,10 +76,13 @@ function scoreLine(line: string, raw: string, bold: string[]): number {
 function pickTitle(lines: string[], bold: string[]): { title: string | null; score: number } {
   let best: { title: string | null; score: number } = { title: null, score: -99 };
   for (const raw of lines) {
-    if (/https?:\/\/|t\.me\/|R\$/i.test(raw)) continue;
-    const line = cleanLine(raw).replace(/[!?.:]+$/, "");
+    if (/https?:\/\/|t\.me\//i.test(raw)) continue;
+    // "Caixa de Som X por R$ 89": aproveita o que vem antes do preço, com um ponto a menos.
+    const hasPrice = /R\$/.test(raw);
+    const text = hasPrice ? raw.slice(0, raw.search(/R\$/)).replace(/\s*(\b(por|de|apenas|só|so|sai|a partir)\b|[:\-–|])\s*$/i, "") : raw;
+    const line = cleanLine(text).replace(/[!?.:]+$/, "");
     if (line.length < 10) continue;
-    const score = scoreLine(line, raw, bold);
+    const score = scoreLine(line, text, bold) - (hasPrice ? 1 : 0);
     if (score > best.score) best = { title: line.slice(0, 140), score };
   }
   return best;

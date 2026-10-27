@@ -96,3 +96,22 @@ describe("grupo pelo link de convite", () => {
     expect(findGroupJid({ ok: true })).toBeNull();
   });
 });
+
+describe("nome do produto em mensagens de grupo", () => {
+  it("não escolhe a chamada para comentar e aproveita o nome na linha do preço", () => {
+    const [post] = groupPosts([{ messageTimestamp: 1761500000000, text: [
+      "🔊 *Caixa de Som Gamer Redragon Anvil GS520 RGB* por R$ 89,00",
+      "💰 No Pix",
+      "🛒 https://link.amazon/B0cI4u3lZ",
+      "",
+      "💬 Deixe seu Comentário ou Dúvidas aqui",
+    ].join("\n") }]);
+    const parsed = parsePost(post);
+    expect(parsed.title).toBe("Caixa de Som Gamer Redragon Anvil GS520 RGB");
+    expect(parsed.priceCents).toBe(8900);
+  });
+  it("quando só há chamadas, a nota do título fica baixa (a oferta vai para a fila)", () => {
+    const [post] = groupPosts([{ messageTimestamp: 1761500000000, text: "🔥 R$ 89,00 no Pix\nhttps://link.amazon/x\nDeixe seu Comentário ou Dúvidas aqui" }]);
+    expect(parsePost(post).titleScore).toBeLessThan(2);
+  });
+});
