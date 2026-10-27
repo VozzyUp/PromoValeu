@@ -43,6 +43,9 @@ export function IntegrationForm({ def, view }: { def: IntegrationDef; view: Inte
         <button type="submit" name="intent" value="test" disabled={pending} className="h-10 rounded-pill bg-accent px-4 text-sm font-bold text-on-accent disabled:opacity-50">
           {pending ? "Aguarde…" : "Salvar e testar conexão"}
         </button>
+        {def.connect ? (
+          <a href={def.connect.href} className="h-10 content-center rounded-pill bg-price px-4 text-sm font-bold text-on-accent">{def.connect.label}</a>
+        ) : null}
         <p role="status" className={`text-sm ${state && state.ok === false ? "text-danger" : "text-muted"}`}>{state?.message ?? ""}</p>
       </div>
     </form>

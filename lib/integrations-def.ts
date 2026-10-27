@@ -1,9 +1,9 @@
 // Quais integrações existem e quais campos cada uma pede. Campos "secret" ficam criptografados e nunca voltam para a tela.
-export type IntegrationKey = "shopee" | "telegram" | "uazapi" | "smtp" | "anthropic";
+export type IntegrationKey = "shopee" | "telegram" | "uazapi" | "smtp" | "anthropic" | "mercadolivre";
 
 export type FieldDef = { name: string; label: string; secret: boolean; placeholder?: string };
 
-export type IntegrationDef = { key: IntegrationKey; title: string; help: string; fields: FieldDef[] };
+export type IntegrationDef = { key: IntegrationKey; title: string; help: string; fields: FieldDef[]; connect?: { href: string; label: string } };
 
 export const INTEGRATIONS: IntegrationDef[] = [
   {
@@ -50,6 +50,16 @@ export const INTEGRATIONS: IntegrationDef[] = [
       { name: "apiKey", label: "Chave da API", secret: true },
       { name: "model", label: "Modelo", secret: false, placeholder: "claude-haiku-5-5" },
     ],
+  },
+  {
+    key: "mercadolivre",
+    title: "Mercado Livre (preços)",
+    help: "App criado em developers.mercadolivre.com.br/devcenter, com o endereço de retorno https://www.promovaleu.com.br/api/mercadolivre/retorno e escopo de leitura. Salve o Client ID e a Secret Key, marque Ligada e clique em Conectar. O robô passa a conferir os preços do Mercado Livre pela API (a página da loja bloqueia robôs).",
+    fields: [
+      { name: "clientId", label: "Client ID", secret: false, placeholder: "Ex.: 1234567890123456" },
+      { name: "clientSecret", label: "Secret Key", secret: true },
+    ],
+    connect: { href: "/api/mercadolivre/conectar", label: "Conectar com o Mercado Livre" },
   },
 ];
 

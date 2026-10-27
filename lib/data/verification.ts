@@ -2,6 +2,9 @@
 import "server-only";
 import { fetchLinkInfo, fetchPreview } from "../link-preview";
 import { checkPrice, priceRoseTwice, type PricePoint } from "../price-check";
+import { mlPriceCents } from "../integrations/mercadolivre";
+import { parseMlUrl } from "../ml-url";
+import { mlAccessToken } from "./integrations";
 import { db } from "../supabase/db";
 import type { DealView } from "../types";
 import { JOIN, toViews, type DealJoinRow } from "./supabase";
@@ -116,7 +119,13 @@ export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
   for (const r of due) {
     stats.checked++;
     try {
-      const preview = await fetchPreview((r.url_resolved ?? r.url_submitted)!);
+      const url = (r.url_resolved ?? r.url_submitted)!;
+      // Mercado Livre bloqueia a página para robôs: com o app conectado, o preço vem da API oficial.
+      const ml = parseMlUrl(url);
+      const mlToken = ml ? await mlAccessToken() : null;
+      const preview = ml && mlToken
+        ? { priceCents: await mlPriceCents(mlToken, ml).catch((e) => { console.error("[recheck] ML", ml.id, e instanceof Error ? e.message : e); return null; }) }
+        : await fetchPreview(url);
       if (!preview || preview.priceCents == null) {
         await db().from("listings").update({ checked_at: new Date().toISOString() }).eq("id", r.listing!.id);
         stats.failed++;

@@ -7,6 +7,7 @@ import { searchOffers } from "../integrations/shopee";
 import { complete } from "../integrations/anthropic";
 import { verifySmtp } from "../integrations/smtp";
 import { instanceStatus } from "../integrations/uazapi";
+import { mlMe, refreshTokens, type MlTokens } from "../integrations/mercadolivre";
 import { db } from "../supabase/db";
 
 type Row = {
@@ -114,6 +115,11 @@ export async function testIntegration(key: IntegrationKey): Promise<{ ok: boolea
     } else if (key === "anthropic") {
       await complete({ apiKey: cfg.apiKey, model: cfg.model }, { system: "Responda só com a palavra ok.", user: "ok?", maxTokens: 8 });
       result = { ok: true, message: `Conectado. O modelo ${cfg.model} respondeu.` };
+    } else if (key === "mercadolivre") {
+      const token = await mlAccessToken();
+      if (!token) throw new Error("Salve, marque Ligada e clique em Conectar com o Mercado Livre.");
+      const me = await mlMe(token);
+      result = { ok: true, message: `Conectado como ${me.nickname ?? me.id}.` };
     } else if (key === "shopee") {
       const offers = await searchOffers({ appId: cfg.appId, secret: cfg.secret }, { keyword: "fone", limit: 1 });
       result = { ok: true, message: `Conectado. A busca de teste devolveu ${offers.length} produto(s).` };
@@ -128,4 +134,45 @@ export async function testIntegration(key: IntegrationKey): Promise<{ ok: boolea
     status: result.ok ? "ok" : "error", last_error: result.ok ? null : result.message, last_tested_at: new Date().toISOString(),
   }).eq("key", key);
   return result;
+}
+/* ------------------------------------------------- Mercado Livre: chave de acesso */
+
+/** Grava a chave recebida do Mercado Livre junto das credenciais (criptografada). */
+export async function saveMlTokens(t: MlTokens): Promise<void> {
+  const row = await readRow("mercadolivre");
+  if (!row) throw new Error("Salve o Client ID e a Secret Key antes.");
+  const secrets = {
+    ...secretsOf(row),
+    accessToken: t.access_token, refreshToken: t.refresh_token, expiresAt: String(Date.now() + (t.expires_in - 120) * 1000),
+  };
+  const { error } = await db().from("integrations").update({
+    config_encrypted: encryptJson(secrets), status: "ok", last_error: null, last_tested_at: new Date().toISOString(),
+  }).eq("key", "mercadolivre");
+  if (error) throw error;
+}
+
+let refreshing: Promise<string | null> | null = null;
+
+/** Chave válida do Mercado Livre (renova se venceu). null se não estiver conectado. */
+export async function mlAccessToken(): Promise<string | null> {
+  const row = await readRow("mercadolivre");
+  if (!row?.enabled) return null;
+  const s = secretsOf(row);
+  const clientId = row.public_config.clientId;
+  if (!clientId || !s.clientSecret || !s.refreshToken) return null;
+  if (s.accessToken && Number(s.expiresAt) > Date.now()) return s.accessToken;
+  // A renovação usa a chave de renovação uma vez só: duas renovações ao mesmo tempo quebrariam a conexão.
+  refreshing ??= refreshTokens({ clientId, clientSecret: s.clientSecret, refreshToken: s.refreshToken })
+    .then(async (t) => {
+      await saveMlTokens(t);
+      return t.access_token;
+    })
+    .catch(async (e) => {
+      await db().from("integrations").update({ status: "error", last_error: e instanceof Error ? e.message.slice(0, 300) : "Falha ao renovar." }).eq("key", "mercadolivre");
+      return null;
+    })
+    .finally(() => {
+      refreshing = null;
+    });
+  return refreshing;
 }
