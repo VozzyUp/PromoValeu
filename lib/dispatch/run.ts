@@ -48,7 +48,14 @@ export async function deliver(channel: Channel, row: DealRow): Promise<string> {
   }
   const cfg = await getIntegrationConfig<UazapiConfig>("uazapi");
   if (!cfg) throw new Error("Integração do WhatsApp desligada ou incompleta.");
-  return image ? sendImage(cfg, channel.target, image, text) : sendText(cfg, channel.target, text);
+  if (!image) return sendText(cfg, channel.target, text);
+  try {
+    return await sendImage(cfg, channel.target, image, text);
+  } catch (e) {
+    // Canal (newsletter) pode recusar foto por link: manda só o texto, que já leva o link da oferta.
+    if (channel.target.endsWith("@newsletter")) return sendText(cfg, channel.target, text);
+    throw e;
+  }
 }
 
 export type DispatchStats = { enqueued: number; sent: number; failed: number; skipped: number };

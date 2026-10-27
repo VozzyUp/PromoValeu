@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { sendTest } from "@/lib/dispatch/run";
 import { db } from "@/lib/supabase/db";
+import { resolveChannel } from "@/lib/sources/whatsapp";
+import { channelInviteKey } from "@/lib/sources/whatsapp-parse";
 
 export type ChannelState = { ok?: boolean; error?: string; message?: string } | undefined;
 
@@ -16,8 +18,16 @@ export async function saveChannelAction(_prev: ChannelState, form: FormData): Pr
   const name = String(form.get("name") ?? "").trim();
   if (name.length < 2 || name.length > 60) return { error: "Dê um nome de 2 a 60 caracteres." };
   const type = form.get("type") === "whatsapp" ? "whatsapp" : "telegram";
-  const target = String(form.get("target") ?? "").trim().slice(0, 120);
-  if (!target) return { error: type === "telegram" ? "Informe o canal, como @meucanal ou o id numérico." : "Informe o número ou o id do grupo." };
+  let target = String(form.get("target") ?? "").trim().slice(0, 120);
+  if (!target) return { error: type === "telegram" ? "Informe o canal, como @meucanal ou o id numérico." : "Informe o link do canal, o número ou o id do grupo." };
+  // Canal do WhatsApp: o link de convite vira o id interno (1203...@newsletter).
+  if (type === "whatsapp" && /whatsapp\.com\/channel\//i.test(target) && channelInviteKey(target)) {
+    try {
+      target = (await resolveChannel(target)).jid;
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Não consegui abrir o canal." };
+    }
+  }
   const minVerdict = ["any", "verified", "good_price"].includes(String(form.get("minVerdict"))) ? String(form.get("minVerdict")) : "any";
   const discount = Number(String(form.get("minDiscountPct") ?? "").replace(",", "."));
   const perHour = Number(form.get("maxPerHour"));
