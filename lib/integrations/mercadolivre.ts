@@ -49,34 +49,60 @@ const toCents = (v: unknown) => (typeof v === "number" && v > 0 ? Math.round(v *
 
 type Item = { price?: number; status?: string };
 
-async function itemPrice(token: string, id: string): Promise<number | null> {
-  // /sale_price é o preço que o comprador vê (com promoção); /items é a reserva.
+/** Preço em centavos e se o anúncio ainda está à venda. */
+export type MlQuote = { cents: number | null; active: boolean };
+
+async function itemQuote(token: string, id: string): Promise<MlQuote> {
+  const it = await mlGet<Item>(token, `/items/${id}?attributes=price,status`);
+  const active = !it.status || it.status === "active";
+  if (!active) return { cents: null, active: false }; // pausado ou encerrado
+  // /sale_price é o preço que o comprador vê (com promoção); o price de /items é a reserva.
   try {
     const sp = await mlGet<{ amount?: number }>(token, `/items/${id}/sale_price?context=channel_marketplace`);
     const c = toCents(sp.amount);
-    if (c) return c;
+    if (c) return { cents: c, active };
   } catch {
-    // segue para /items
+    // fica com o price de /items
   }
-  const it = await mlGet<Item>(token, `/items/${id}?attributes=price,status`);
-  if (it.status && it.status !== "active") return null; // anúncio pausado ou encerrado
-  return toCents(it.price);
+  return { cents: toCents(it.price), active };
 }
 
-/** Preço atual em centavos, ou null se não deu para saber. */
-export async function mlPriceCents(token: string, ref: MlRef): Promise<number | null> {
-  if (ref.kind === "item") return itemPrice(token, ref.id);
+export async function mlQuote(token: string, ref: MlRef): Promise<MlQuote> {
+  if (ref.kind === "item") return itemQuote(token, ref.id);
   if (ref.kind === "product") {
-    const p = await mlGet<{ buy_box_winner?: { price?: number; item_id?: string } | null }>(token, `/products/${ref.id}`);
-    return toCents(p.buy_box_winner?.price) ?? (p.buy_box_winner?.item_id ? itemPrice(token, p.buy_box_winner.item_id) : null);
+    const p = await mlGet<{ status?: string; buy_box_winner?: { price?: number; item_id?: string } | null }>(token, `/products/${ref.id}`);
+    const win = p.buy_box_winner;
+    if (!win) return { cents: null, active: false }; // catálogo sem ninguém vendendo
+    const direct = toCents(win.price);
+    return direct ? { cents: direct, active: true } : win.item_id ? itemQuote(token, win.item_id) : { cents: null, active: true };
   }
   // Produto do vendedor: acha um anúncio dele e usa o preço do anúncio.
   const up = await mlGet<{ user_id?: number; seller_id?: number }>(token, `/user-products/${ref.id}`);
   const seller = up.user_id ?? up.seller_id;
-  if (!seller) return null;
+  if (!seller) return { cents: null, active: true };
   const s = await mlGet<{ results?: string[] }>(token, `/users/${seller}/items/search?user_product_id=${ref.id}`);
   const first = s.results?.[0];
-  return first ? itemPrice(token, first) : null;
+  return first ? itemQuote(token, first) : { cents: null, active: true };
+}
+
+/** Preço atual em centavos, ou null se não deu para saber. */
+export async function mlPriceCents(token: string, ref: MlRef): Promise<number | null> {
+  return (await mlQuote(token, ref)).cents;
+}
+
+export type MlCatalogHit = { id: string; name: string; gtin: string | null };
+
+/** Busca no catálogo do Mercado Livre por código de barras ou por nome. */
+export async function mlSearchCatalog(token: string, o: { gtin?: string | null; title?: string }): Promise<MlCatalogHit[]> {
+  const q = new URLSearchParams({ status: "active", site_id: "MLB", limit: "5" });
+  if (o.gtin) q.set("product_identifier", o.gtin);
+  else if (o.title) q.set("q", o.title.slice(0, 100));
+  else return [];
+  type R = { results?: { id: string; name: string; attributes?: { id: string; value_name?: string | null }[] }[] };
+  const r = await mlGet<R>(token, `/products/search?${q}`);
+  return (r.results ?? []).map((x) => ({
+    id: x.id, name: x.name, gtin: x.attributes?.find((a) => a.id === "GTIN")?.value_name?.split(",")[0]?.trim() ?? null,
+  }));
 }
 
 export const mlMe = (token: string) => mlGet<{ id: number; nickname?: string }>(token, "/users/me");

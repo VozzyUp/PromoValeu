@@ -52,3 +52,22 @@ describe("priceRoseTwice", () => {
     expect(priceRoseTwice(10000, [12000])).toBe(false);
   });
 });
+describe("checkPrice com o preço em outra loja", () => {
+  const now = new Date("2026-10-27T12:00:00Z");
+  it("sem histórico: bom preço quando está 5% ou mais abaixo do mercado", () => {
+    const r = checkPrice({ priceCents: 8900, listPriceCents: null, history: [], marketCents: 12900, now });
+    expect(r.verdict).toBe("good_price");
+    expect(r.referenceCents).toBe(12900);
+  });
+  it("sem histórico: desconto inflado quando o 'de' é de fachada", () => {
+    expect(checkPrice({ priceCents: 10000, listPriceCents: 19900, history: [], marketCents: 9900, now }).verdict).toBe("inflated");
+  });
+  it("sem histórico e preço igual ao mercado: sem comparação", () => {
+    expect(checkPrice({ priceCents: 9900, listPriceCents: null, history: [], marketCents: 9900, now }).verdict).toBe("no_comparison");
+  });
+  it("não dá 'conferido' se outra loja vende bem mais barato", () => {
+    const hist = [10, 6, 2].map((d) => ({ priceCents: 10000, at: new Date(now.getTime() - d * 86400_000) }));
+    expect(checkPrice({ priceCents: 8000, listPriceCents: null, history: hist, now }).verdict).toBe("verified");
+    expect(checkPrice({ priceCents: 8000, listPriceCents: null, history: hist, marketCents: 6000, now }).verdict).toBe("good_price");
+  });
+});

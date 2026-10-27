@@ -2,9 +2,10 @@
 import "server-only";
 import { fetchLinkInfo, fetchPreview } from "../link-preview";
 import { checkPrice, priceRoseTwice, type PricePoint } from "../price-check";
-import { mlPriceCents } from "../integrations/mercadolivre";
+import { mlQuote } from "../integrations/mercadolivre";
 import { parseMlUrl } from "../ml-url";
 import { mlAccessToken } from "./integrations";
+import { marketReference, refreshMarketPrice } from "./market";
 import { db } from "../supabase/db";
 import type { DealView } from "../types";
 import { JOIN, toViews, type DealJoinRow } from "./supabase";
@@ -55,11 +56,12 @@ export async function verifyDeal(dealId: string): Promise<string | null> {
     .filter((s) => !((s.source === "post" || s.source === "robot") && new Date(s.captured_at).getTime() >= postedAt))
     .map((s) => ({ priceCents: s.price_cents, at: new Date(s.captured_at) }));
 
-  const r = checkPrice({ priceCents: d.price_cents, listPriceCents: d.list_price_cents, history });
+  const market = await marketReference(d.listing_id).catch(() => ({ cents: null, stores: 0 }));
+  const r = checkPrice({ priceCents: d.price_cents, listPriceCents: d.list_price_cents, history, marketCents: market.cents });
   const ev = await db().from("verifications").insert({
     deal_id: d.id, verdict: r.verdict, price_cents: d.price_cents, reference_price_cents: r.referenceCents,
-    real_discount_bp: r.realDiscountBp, stores_compared: 1, history_days: r.historyDays,
-    evidence: { min30: r.min30Cents, median: r.medianCents, points: history.length },
+    real_discount_bp: r.realDiscountBp, stores_compared: 1 + market.stores, history_days: r.historyDays,
+    evidence: { min30: r.min30Cents, median: r.medianCents, points: history.length, market: market.cents },
   });
   if (ev.error) console.error("[verify] registro", ev.error);
   const up = await db().from("deals").update({
@@ -82,6 +84,11 @@ export async function trackNewDeal(o: { dealId: string; storeId: string; urlKey:
       return;
     }
     await verifyDeal(o.dealId);
+    // Mesmo produto no Mercado Livre: dá o selo já no primeiro dia quando a comparação é segura.
+    if (await refreshMarketPrice(o.dealId).catch((e) => {
+      console.error("[mercado] comparação falhou", e instanceof Error ? e.message : e);
+      return false;
+    })) await verifyDeal(o.dealId);
   } catch (e) {
     console.error("[verify] falha ao registrar preço", e);
   }
@@ -123,9 +130,23 @@ export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
       // Mercado Livre bloqueia a página para robôs: com o app conectado, o preço vem da API oficial.
       const ml = parseMlUrl(url);
       const mlToken = ml ? await mlAccessToken() : null;
-      const preview = ml && mlToken
-        ? { priceCents: await mlPriceCents(mlToken, ml).catch((e) => { console.error("[recheck] ML", ml.id, e instanceof Error ? e.message : e); return null; }) }
-        : await fetchPreview(url);
+      let preview: { priceCents: number | null } | null;
+      if (ml && mlToken) {
+        const q = await mlQuote(mlToken, ml).catch((e) => {
+          console.error("[recheck] ML", ml.id, e instanceof Error ? e.message : e);
+          return null;
+        });
+        if (q && !q.active) {
+          await db().from("deals").update({ status: "expired", expired_reason: "Anúncio pausado ou encerrado no Mercado Livre" }).eq("id", r.id);
+          stats.expired++;
+          continue;
+        }
+        preview = q ? { priceCents: q.cents } : null;
+      } else {
+        preview = await fetchPreview(url);
+        // Outra loja: o preço do mesmo produto no Mercado Livre entra na conta do selo.
+        if (await refreshMarketPrice(r.id).catch(() => false)) await verifyDeal(r.id);
+      }
       if (!preview || preview.priceCents == null) {
         await db().from("listings").update({ checked_at: new Date().toISOString() }).eq("id", r.listing!.id);
         stats.failed++;

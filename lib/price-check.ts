@@ -29,13 +29,27 @@ function median(values: number[]): number {
  * - good_price: desconto real >= 5%
  * - inflated: com pelo menos 7 dias de histórico, o "de" da loja é >= 20% acima da referência e o desconto real fica abaixo de 5%
  * - no_comparison: histórico curto ou sem diferença
+ * marketCents (mesmo produto em outra loja) permite "good_price" e "inflated" sem esperar o histórico.
  */
-export function checkPrice(o: { priceCents: number; listPriceCents: number | null; history: PricePoint[]; now?: Date }): PriceCheck {
+export function checkPrice(o: { priceCents: number; listPriceCents: number | null; history: PricePoint[]; marketCents?: number | null; now?: Date }): PriceCheck {
   const now = (o.now ?? new Date()).getTime();
   const recent = o.history.filter((p) => now - p.at.getTime() <= 30 * DAY && p.priceCents > 0);
   const historyDays = recent.length ? Math.floor((now - Math.min(...recent.map((p) => p.at.getTime()))) / DAY) : 0;
+  const market = o.marketCents && o.marketCents > 0 && o.priceCents > 0 ? o.marketCents : null;
+
+  // Comparação com o mesmo produto em outra loja (Mercado Livre): vale desde o primeiro dia.
+  const byMarket = (): PriceCheck | null => {
+    if (!market) return null;
+    const bp = Math.round(((market - o.priceCents) / market) * 10000);
+    const base = { referenceCents: market, realDiscountBp: bp > 0 ? bp : null, historyDays, min30Cents: null, medianCents: null };
+    // "De" bem acima do que o produto custa em outra loja, e o "por" nem é mais barato que lá: desconto de fachada.
+    if (o.listPriceCents && o.listPriceCents >= market * 1.2 && o.priceCents >= market * 0.98) return { verdict: "inflated", ...base };
+    if (bp >= 500) return { verdict: "good_price", ...base };
+    return null;
+  };
+
   const none = { referenceCents: null, realDiscountBp: null, historyDays, min30Cents: null, medianCents: null };
-  if (recent.length === 0 || o.priceCents <= 0) return { verdict: "no_comparison", ...none };
+  if (recent.length === 0 || o.priceCents <= 0) return byMarket() ?? { verdict: "no_comparison", ...none };
 
   const prices = recent.map((p) => p.priceCents);
   const med = median(prices);
@@ -43,12 +57,13 @@ export function checkPrice(o: { priceCents: number; listPriceCents: number | nul
   const realBp = Math.round(((med - o.priceCents) / med) * 10000);
   const base = { referenceCents: med, realDiscountBp: realBp > 0 ? realBp : null, historyDays, min30Cents: min30, medianCents: med };
 
-  // Sem histórico suficiente não dá para acusar ninguém: só "sem comparação".
-  if (historyDays < MIN_HISTORY_DAYS) return { verdict: "no_comparison", ...base };
+  // Sem histórico suficiente não dá para acusar ninguém pelo histórico: só a comparação com outra loja.
+  if (historyDays < MIN_HISTORY_DAYS) return byMarket() ?? { verdict: "no_comparison", ...base };
   if (o.listPriceCents && o.listPriceCents >= med * 1.2 && realBp < 500) return { verdict: "inflated", ...base };
-  if (realBp >= 1000 && o.priceCents <= min30 * 1.01) return { verdict: "verified", ...base };
+  // "Conferido" exige também não estar mais caro que em outra loja.
+  if (realBp >= 1000 && o.priceCents <= min30 * 1.01 && (!market || o.priceCents <= market * 1.05)) return { verdict: "verified", ...base };
   if (realBp >= 500) return { verdict: "good_price", ...base };
-  return { verdict: "no_comparison", ...base };
+  return byMarket() ?? { verdict: "no_comparison", ...base };
 }
 
 /** O preço da página subiu o bastante, duas vezes seguidas, para dizer que a oferta acabou? */
