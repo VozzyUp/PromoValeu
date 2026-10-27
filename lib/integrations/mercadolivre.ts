@@ -49,22 +49,41 @@ const toCents = (v: unknown) => (typeof v === "number" && v > 0 ? Math.round(v *
 
 type Item = { price?: number; status?: string };
 
-/** Preço em centavos e se o anúncio ainda está à venda. */
-export type MlQuote = { cents: number | null; active: boolean };
+/** Preço em centavos e se o anúncio ainda está à venda. pixCents: preço no Pix, se a API de promoções mostrar. */
+export type MlQuote = { cents: number | null; active: boolean; pixCents?: number | null; promoProbe?: string };
+
+type ItemPromo = { type?: string; status?: string; price?: number; name?: string; payment_method?: string };
+
+/**
+ * Promoções do anúncio (inclui "Desconto no Pix"). A documentação põe essa consulta na área do vendedor:
+ * não sabemos se ela responde para anúncios de outros vendedores, então o resultado volta em promoProbe.
+ */
+async function itemPix(token: string, id: string): Promise<{ pixCents: number | null; probe: string }> {
+  try {
+    const list = await mlGet<ItemPromo[] | { results?: ItemPromo[] }>(token, `/seller-promotions/items/${id}?app_version=v2`);
+    const promos = Array.isArray(list) ? list : (list.results ?? []);
+    const pix = promos.filter((p) => p.status === "started" && (/pix/i.test(p.name ?? "") || /pix/i.test(p.payment_method ?? "") || p.type === "BANK"));
+    const prices = pix.map((p) => toCents(p.price)).filter((c): c is number => c != null);
+    return { pixCents: prices.length ? Math.min(...prices) : null, probe: `promoções ${id}: ok, ${promos.length} promoção(ões), Pix ${prices.length ? "encontrado" : "não"}` };
+  } catch (e) {
+    return { pixCents: null, probe: `promoções ${id}: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
 
 async function itemQuote(token: string, id: string): Promise<MlQuote> {
   const it = await mlGet<Item>(token, `/items/${id}?attributes=price,status`);
   const active = !it.status || it.status === "active";
   if (!active) return { cents: null, active: false }; // pausado ou encerrado
+  const pix = await itemPix(token, id);
   // /sale_price é o preço que o comprador vê (com promoção); o price de /items é a reserva.
   try {
     const sp = await mlGet<{ amount?: number }>(token, `/items/${id}/sale_price?context=channel_marketplace`);
     const c = toCents(sp.amount);
-    if (c) return { cents: c, active };
+    if (c) return { cents: c, active, pixCents: pix.pixCents, promoProbe: pix.probe };
   } catch {
     // fica com o price de /items
   }
-  return { cents: toCents(it.price), active };
+  return { cents: toCents(it.price), active, pixCents: pix.pixCents, promoProbe: pix.probe };
 }
 
 export async function mlQuote(token: string, ref: MlRef): Promise<MlQuote> {
@@ -72,9 +91,9 @@ export async function mlQuote(token: string, ref: MlRef): Promise<MlQuote> {
   if (ref.kind === "product") {
     const p = await mlGet<{ status?: string; buy_box_winner?: { price?: number; item_id?: string } | null }>(token, `/products/${ref.id}`);
     const win = p.buy_box_winner;
+    if (win?.item_id) return itemQuote(token, win.item_id); // pelo anúncio: dá para ver a promoção do Pix
     const direct = toCents(win?.price);
     if (direct) return { cents: direct, active: true };
-    if (win?.item_id) return itemQuote(token, win.item_id);
     // Sem vendedor em destaque: o anúncio mais barato do catálogo.
     const list = await mlGet<{ results?: { item_id?: string; price?: number }[] }>(token, `/products/${ref.id}/items?limit=5`);
     const prices = (list.results ?? []).map((x) => toCents(x.price)).filter((c): c is number => c != null);
@@ -109,6 +128,17 @@ export async function mlSearchCatalog(token: string, o: { gtin?: string | null; 
   return (r.results ?? []).map((x) => ({
     id: x.id, name: x.name, gtin: x.attributes?.find((a) => a.id === "GTIN")?.value_name?.split(",")[0]?.trim() ?? null,
   }));
+}
+
+/** Nome do produto pela API (para mensagens que não trazem o nome). */
+export async function mlTitle(token: string, ref: MlRef): Promise<string | null> {
+  try {
+    if (ref.kind === "product") return (await mlGet<{ name?: string }>(token, `/products/${ref.id}`)).name ?? null;
+    if (ref.kind === "item") return (await mlGet<{ title?: string }>(token, `/items/${ref.id}?attributes=title`)).title ?? null;
+    return (await mlGet<{ name?: string }>(token, `/user-products/${ref.id}`)).name ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export const mlMe = (token: string) => mlGet<{ id: number; nickname?: string }>(token, "/users/me");

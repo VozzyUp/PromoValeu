@@ -169,6 +169,8 @@ export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
           continue;
         }
         if (q && q.cents == null) why(`ML ${ml.id}: a API não informou preço`);
+        // Teste: a consulta de promoções (onde aparece o Pix) responde para anúncios de outros vendedores?
+        if (q?.promoProbe) why(`Pix: ${q.promoProbe}${q.pixCents ? ` (R$ ${(q.pixCents / 100).toFixed(2)})` : ""}`);
         preview = q ? { priceCents: q.cents } : null;
       } else {
         preview = await fetchPreview(url);

@@ -4,6 +4,9 @@ import "server-only";
 import { createDeal, createStoreForHost, listStores } from "../data";
 import { isHostBlocked } from "../data/admin";
 import { autoCategoryId } from "../data/auto-category";
+import { mlAccessToken } from "../data/integrations";
+import { mlQuote, mlTitle } from "../integrations/mercadolivre";
+import { parseMlUrl } from "../ml-url";
 import { notifyPublished, saveDealImages } from "../data/publish";
 import { linkDealToProduct, trackNewDeal } from "../data/verification";
 import { formatPrice } from "../format";
@@ -207,8 +210,24 @@ async function processPosts(src: SourceRow, posts: RawPost[], postImage: (p: Raw
       let preview: Preview | null = res.page ? parsePreview(res.page.html, res.page.url.toString()) : null;
       if (!preview && !offline()) preview = (await fetchLinkInfo(res.storeUrl.toString())).preview;
 
-      const priceCents = parsed.priceCents ?? preview?.priceCents ?? null;
-      const pageTitle = cleanPageTitle(preview?.title);
+      // Mercado Livre bloqueia a página para robôs: com o app conectado, preço e nome que faltarem vêm da API.
+      let apiPrice: number | null = null;
+      let apiTitle: string | null = null;
+      const mlRef = parseMlUrl(res.storeUrl.toString());
+      if (mlRef && !offline() && (parsed.priceCents == null || !cleanPageTitle(preview?.title))) {
+        const token = await mlAccessToken().catch(() => null);
+        if (token) {
+          const q = await mlQuote(token, mlRef).catch(() => null);
+          if (q && !q.active) {
+            await record("filtered", "Anúncio pausado ou encerrado no Mercado Livre.");
+            continue;
+          }
+          apiPrice = q?.cents ?? null;
+          apiTitle = await mlTitle(token, mlRef);
+        }
+      }
+      const priceCents = parsed.priceCents ?? preview?.priceCents ?? apiPrice;
+      const pageTitle = cleanPageTitle(preview?.title) ?? cleanPageTitle(apiTitle);
       // Linha com cara forte de nome de produto ganha; se a publicação só tem chamada, vale o título da página da loja.
       const title = parsed.title && parsed.titleScore >= 3 ? parsed.title : pageTitle ?? parsed.title;
       // Sem nome confiável (a loja não mostrou a página e o texto só tem chamada): vai para a fila mesmo com "publicar direto".
