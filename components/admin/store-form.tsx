@@ -65,8 +65,9 @@ export function StoreForm({ store }: { store: AdminStore }) {
         </select>
       </div>
       <div className="md:col-span-2">
-        <label htmlFor={`${id}-tpl`} className="mb-1 block text-sm font-bold">Modelo do nosso link (use {"{url}"} onde entra o endereço)</label>
-        <input id={`${id}-tpl`} name="affiliateTemplate" defaultValue={store.affiliateTemplate ?? ""} placeholder="https://rede.exemplo/ir?id=SEU_ID&to={url}" className={input} />
+        <label htmlFor={`${id}-tpl`} className="mb-1 block text-sm font-bold">Nosso código de afiliado (vale só para ofertas da equipe e do robô)</label>
+        <input id={`${id}-tpl`} name="affiliateTemplate" defaultValue={store.affiliateTemplate ?? ""} placeholder="Amazon: tag=SEU_ID-20 · Rede: https://rede.exemplo/ir?id=SEU_ID&to={url}" className={input} />
+        <p className="mt-1 text-xs text-muted">Parâmetros (ex.: <code>tag=SEU_ID-20</code>) entram no fim do link da loja. Com <code>{"{url}"}</code>, o link da loja vai dentro do link da rede. Vazio: sem afiliado.</p>
       </div>
       <div>
         <label htmlFor={`${id}-split`} className="mb-1 block text-sm font-bold">Parte do dono na divisão (%)</label>

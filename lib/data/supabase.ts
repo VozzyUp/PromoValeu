@@ -143,6 +143,13 @@ export async function getDealByCode(code: string) {
   return data ? toDeal(data as unknown as DealRow) : null;
 }
 
+/** Modelo do nosso link de afiliado da loja (null = sem afiliado). */
+export async function getStoreAffiliateTemplate(storeId: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin().from("stores").select("affiliate_template").eq("id", storeId).maybeSingle();
+  if (error) throw error;
+  return (data as { affiliate_template: string | null } | null)?.affiliate_template ?? null;
+}
+
 export async function listCategories(): Promise<Category[]> {
   const { data, error } = await supabaseAdmin().from("categories").select("id, name, slug").order("sort");
   if (error) throw error;
