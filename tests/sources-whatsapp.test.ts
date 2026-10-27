@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parsePost } from "../lib/sources/parse-post";
 import {
-  channelInviteKey, channelJid, channelPosts, extractLinks, groupPosts, messageText, readChannelInfo, stripFormatting,
+  channelInviteKey, channelJid, findGroupJid, groupInviteCode, channelPosts, extractLinks, groupPosts, messageText, readChannelInfo, stripFormatting,
 } from "../lib/sources/whatsapp-parse";
 
 const OFFER = [
@@ -85,5 +85,14 @@ describe("identificação do canal", () => {
     expect(readChannelInfo({ response: { id: "120363999999999999@newsletter", name: "Canal Y" } }))
       .toEqual({ jid: "120363999999999999@newsletter", name: "Canal Y" });
     expect(readChannelInfo({ response: {} })).toEqual({ jid: null, name: null });
+  });
+});
+
+describe("grupo pelo link de convite", () => {
+  it("lê o código e acha o JID na resposta", () => {
+    expect(groupInviteCode("https://chat.whatsapp.com/E7fDNE9h9zdleOZGPzbLA0?s=cl&p=i")).toBe("E7fDNE9h9zdleOZGPzbLA0");
+    expect(groupInviteCode("https://whatsapp.com/channel/0029Va")).toBeNull();
+    expect(findGroupJid({ group: { JID: "120363153742561022@g.us", Name: "X" } })).toBe("120363153742561022@g.us");
+    expect(findGroupJid({ ok: true })).toBeNull();
   });
 });

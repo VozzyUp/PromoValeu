@@ -118,3 +118,21 @@ export function readChannelInfo(resp: unknown): { jid: string | null; name: stri
   walk(resp, "", 0);
   return { jid, name: name ? String(name).slice(0, 120) : null };
 }
+
+/** Código do convite em "https://chat.whatsapp.com/E7fDNE9h..." (também no meio de um texto). */
+export function groupInviteCode(input: string): string | null {
+  const m = /chat\.whatsapp\.com\/(?:invite\/)?([A-Za-z0-9]{10,40})/i.exec(input);
+  return m ? m[1] : null;
+}
+
+/** Primeiro JID de grupo ("...@g.us") em qualquer formato de resposta. */
+export function findGroupJid(resp: unknown, depth = 0): string | null {
+  if (depth > 6 || resp == null) return null;
+  if (typeof resp === "string") return /^[\d-]{10,40}@g\.us$/.test(resp) ? resp : null;
+  if (typeof resp !== "object") return null;
+  for (const v of Object.values(resp as Record<string, unknown>)) {
+    const found = findGroupJid(v, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}

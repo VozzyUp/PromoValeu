@@ -31,7 +31,7 @@ export function ChannelForm({ ch }: { ch: ChannelValues }) {
           <label htmlFor={`t-${k}`} className="mb-1 block text-sm font-bold">Tipo</label>
           <select id={`t-${k}`} name="type" defaultValue={ch.type} className={input}><option value="telegram">Telegram</option><option value="whatsapp">WhatsApp (UAZAPI)</option></select>
         </div>
-        <div className="md:col-span-2"><label htmlFor={`g-${k}`} className="mb-1 block text-sm font-bold">Destino (Telegram: @canal ou id do chat · WhatsApp: link do canal, número ou id do grupo)</label><input id={`g-${k}`} name="target" defaultValue={ch.target} required className={input} /></div>
+        <div className="md:col-span-2"><label htmlFor={`g-${k}`} className="mb-1 block text-sm font-bold">Destino (Telegram: @canal ou id do chat · WhatsApp: link do canal, link de convite do grupo ou número)</label><input id={`g-${k}`} name="target" defaultValue={ch.target} required className={input} /></div>
         <div>
           <label htmlFor={`v-${k}`} className="mb-1 block text-sm font-bold">Selo mínimo</label>
           <select id={`v-${k}`} name="minVerdict" defaultValue={ch.minVerdict} className={input}>

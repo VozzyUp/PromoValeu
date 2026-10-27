@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { sendTest } from "@/lib/dispatch/run";
 import { db } from "@/lib/supabase/db";
-import { resolveChannel } from "@/lib/sources/whatsapp";
-import { channelInviteKey } from "@/lib/sources/whatsapp-parse";
+import { resolveChannel, resolveGroup } from "@/lib/sources/whatsapp";
+import { channelInviteKey, groupInviteCode } from "@/lib/sources/whatsapp-parse";
 
 export type ChannelState = { ok?: boolean; error?: string; message?: string } | undefined;
 
@@ -26,6 +26,12 @@ export async function saveChannelAction(_prev: ChannelState, form: FormData): Pr
       target = (await resolveChannel(target)).jid;
     } catch (e) {
       return { error: e instanceof Error ? e.message : "Não consegui abrir o canal." };
+    }
+  } else if (type === "whatsapp" && groupInviteCode(target)) {
+    try {
+      target = await resolveGroup(target);
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Não consegui abrir o grupo." };
     }
   }
   target = target.slice(0, 120);

@@ -51,3 +51,6 @@ export async function findMessages(cfg: UazapiConfig, chatid: string, limit = 60
   const r = await call<{ messages?: unknown[] }>(cfg, "/message/find", { chatid, limit, offset: 0 });
   return Array.isArray(r.messages) ? r.messages : [];
 }
+
+/** Dados do grupo pelo link de convite, sem entrar nele. */
+export const groupInviteInfo = (cfg: UazapiConfig, invitecode: string) => call<unknown>(cfg, "/group/inviteInfo", { invitecode });

@@ -2,11 +2,11 @@
 import "server-only";
 import { getIntegrationConfig } from "../data/integrations";
 import {
-  findMessages, listGroups, newsletterByInvite, newsletterFollow, newsletterMessages, type UazapiConfig,
+  findMessages, groupInviteInfo, listGroups, newsletterByInvite, newsletterFollow, newsletterMessages, type UazapiConfig,
 } from "../integrations/uazapi";
 import type { RawPost } from "./types";
 import {
-  channelInviteKey, channelJid, channelPosts, groupPosts, readChannelInfo, type ChannelItem, type GroupMessage,
+  channelInviteKey, channelJid, channelPosts, findGroupJid, groupInviteCode, groupPosts, readChannelInfo, type ChannelItem, type GroupMessage,
 } from "./whatsapp-parse";
 
 export type WhatsappKind = "whatsapp_channel" | "whatsapp_group";
@@ -53,4 +53,13 @@ export async function resolveChannel(input: string): Promise<{ jid: string; name
 export async function whatsappGroups(): Promise<{ jid: string; name: string }[]> {
   const groups = await listGroups(await uazapiConfig());
   return groups.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+/** Grupo pelo link de convite (chat.whatsapp.com/...). O número da UAZAPI precisa estar no grupo para enviar. */
+export async function resolveGroup(input: string): Promise<string> {
+  const code = groupInviteCode(input);
+  if (!code) throw new Error("Cole o link de convite do grupo (https://chat.whatsapp.com/...).");
+  const jid = findGroupJid(await groupInviteInfo(await uazapiConfig(), code));
+  if (!jid) throw new Error("Não achei esse grupo. Confira se o link de convite ainda vale.");
+  return jid;
 }
