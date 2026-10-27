@@ -51,7 +51,23 @@ function isShouting(s: string): boolean {
   return words.filter((w) => w === w.toUpperCase()).length / words.length > 0.8;
 }
 
-const HOOK_START = /^(possui|ideal|perfeit\w*|garant\w*|chegou|olha|imagina|quem|para quem|sabe|voc[eê]|seu|sua|deixe|n[aã]o perca|[uú]ltimas?|s[oó] hoje|hoje)\b/i;
+const ACRONYMS = new Set([
+  "RGB", "LED", "USB", "TV", "HD", "UHD", "FHD", "SSD", "HDD", "PC", "LG", "JBL", "HP", "AOC", "GPU", "CPU", "RAM", "XL", "XXL", "UV",
+  "OLED", "QLED", "NFC", "GPS", "TWS", "ANC", "ABS", "PVC", "MDF", "NVME", "DDR", "WIFI", "ATX", "IPS", "VA", "TN", "PS", "XBOX", "HDMI", "BT",
+]);
+const SMALL_WORDS = new Set(["de", "da", "do", "das", "dos", "e", "com", "para", "em", "sem", "a", "o", "na", "no", "por"]);
+
+/** "CAIXA DE SOM REDRAGON RGB" vira "Caixa de Som Redragon RGB": siglas curtas e códigos com número ficam como estão. */
+export function niceCase(s: string): string {
+  return s.split(" ").map((w, i) => {
+    const lower = w.toLocaleLowerCase("pt-BR");
+    if (i > 0 && SMALL_WORDS.has(lower)) return lower;
+    if (/\d/.test(w) || ACRONYMS.has(w.replace(/[^\p{L}]/gu, "").toUpperCase())) return w;
+    return lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1);
+  }).join(" ");
+}
+
+const HOOK_START =/^(possui|ideal|perfeit\w*|garant\w*|chegou|olha|imagina|quem|para quem|sabe|voc[eê]|seu|sua|deixe|n[aã]o perca|[uú]ltimas?|s[oó] hoje|hoje)\b/i;
 /** Linha que só diz onde comprar ("Loja Oficial X na Amazon:", "Vendido por ..."). */
 const WHERE = /\b(loja oficial|lojas oficiais|vendido (por|pela|pelo)|dispon[ií]vel (na|no|em)|compre (na|no|aqui))\b/i;
 
@@ -59,7 +75,8 @@ const WHERE = /\b(loja oficial|lojas oficiais|vendido (por|pela|pelo)|dispon[ií
 function scoreLine(line: string, raw: string, bold: string[]): number {
   let score = 0;
   const allCaps = isShouting(line);
-  if (allCaps) score -= 3;
+  // Maiúsculas com chamada ("CORRE!", "OFERTA") é grito. Nome de produto longo em maiúsculas é comum nos grupos.
+  if (allCaps) score -= NOISE.test(line) || /[!‼❗]/u.test(raw) ? 3 : line.split(" ").length >= 5 ? 0 : 1;
   if (NOISE.test(line)) score -= 3;
   if (WHERE.test(line)) score -= 3;
   if (/[:：]\s*$/u.test(raw.trim())) score -= 3; // rótulo do link que vem embaixo
@@ -83,7 +100,7 @@ function pickTitle(lines: string[], bold: string[]): { title: string | null; sco
     const line = cleanLine(text).replace(/[!?.:]+$/, "");
     if (line.length < 10) continue;
     const score = scoreLine(line, text, bold) - (hasPrice ? 1 : 0);
-    if (score > best.score) best = { title: line.slice(0, 140), score };
+    if (score > best.score) best = { title: (isShouting(line) ? niceCase(line) : line).slice(0, 140), score };
   }
   return best;
 }

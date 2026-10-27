@@ -115,3 +115,27 @@ describe("nome do produto em mensagens de grupo", () => {
     expect(parsePost(post).titleScore).toBeLessThan(2);
   });
 });
+
+describe("mensagem real do grupo Ofertas Gamer (27/10)", () => {
+  it("acha o nome em maiúsculas e deixa legível", () => {
+    const [post] = groupPosts([{ messageTimestamp: 1761528540000, text: [
+      "🔥 CAIXA DE SOM REDRAGON GAMER CALLIOPE RGB PRETO",
+      "",
+      "💵 R$ 89 no pix",
+      "",
+      "🔗 LINK: https://link.amazon/B0cI4u3lZ",
+      "",
+      "⚠️Cupom, preço e estoque por tempo limitado.",
+      "📢 Anúncio",
+      "",
+      "▬ ▬ ▬ ▬ ▬ ▬ ▬ ▬ ▬ ▬",
+      "",
+      "💬 Deixe seu Comentário ou Dúvidas aqui https://eioferta.com.br/coment-jer-87dc0",
+    ].join("\n") }]);
+    const parsed = parsePost(post);
+    expect(parsed.title).toBe("Caixa de Som Redragon Gamer Calliope RGB Preto");
+    expect(parsed.titleScore).toBeGreaterThanOrEqual(2);
+    expect(parsed.priceCents).toBe(8900);
+    expect(parsed.links[0]).toBe("https://link.amazon/B0cI4u3lZ");
+  });
+});
