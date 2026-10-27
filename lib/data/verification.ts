@@ -107,11 +107,16 @@ export async function getPriceHistory(dealId: string): Promise<HistoryPoint[]> {
   return (data as { price_cents: number; captured_at: string }[]).map((s) => ({ at: s.captured_at, priceCents: s.price_cents }));
 }
 
-export type RecheckStats = { checked: number; updated: number; expired: number; failed: number };
+export type RecheckStats = { checked: number; updated: number; expired: number; failed: number; reasons?: string[] };
 
 /** Confere de novo o preço das ofertas no ar (cada anúncio no máximo a cada 6 horas). */
 export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
-  const stats: RecheckStats = { checked: 0, updated: 0, expired: 0, failed: 0 };
+  const stats: RecheckStats = { checked: 0, updated: 0, expired: 0, failed: 0, reasons: [] };
+  // Motivos das falhas (até 8, sem repetir) ficam no histórico de execuções, para dar para entender sem ler o log do servidor.
+  const why = (msg: string) => {
+    const m = msg.slice(0, 160);
+    if (stats.reasons!.length < 8 && !stats.reasons!.includes(m)) stats.reasons!.push(m);
+  };
   const cutoff = new Date(Date.now() - 6 * 3600_000).toISOString();
   const { data, error } = await db().from("deals")
     .select("id, price_cents, url_submitted, url_resolved, listing:listings!deals_listing_id_fkey(id, checked_at)")
@@ -133,7 +138,7 @@ export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
       let preview: { priceCents: number | null } | null;
       if (ml && mlToken) {
         const q = await mlQuote(mlToken, ml).catch((e) => {
-          console.error("[recheck] ML", ml.id, e instanceof Error ? e.message : e);
+          why(`ML ${ml.id}: ${e instanceof Error ? e.message : String(e)}`);
           return null;
         });
         if (q && !q.active) {
@@ -141,11 +146,16 @@ export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
           stats.expired++;
           continue;
         }
+        if (q && q.cents == null) why(`ML ${ml.id}: a API não informou preço`);
         preview = q ? { priceCents: q.cents } : null;
       } else {
         preview = await fetchPreview(url);
+        if (!preview || preview.priceCents == null) why(`${new URL(url).hostname}: a página da loja não mostrou o preço`);
         // Outra loja: o preço do mesmo produto no Mercado Livre entra na conta do selo.
-        if (await refreshMarketPrice(r.id).catch(() => false)) await verifyDeal(r.id);
+        if (await refreshMarketPrice(r.id).catch((e) => {
+          why(`comparação ML: ${e instanceof Error ? e.message : String(e)}`);
+          return false;
+        })) await verifyDeal(r.id);
       }
       if (!preview || preview.priceCents == null) {
         await db().from("listings").update({ checked_at: new Date().toISOString() }).eq("id", r.listing!.id);
@@ -165,6 +175,7 @@ export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
       }
     } catch (e) {
       console.error("[recheck]", r.id, e);
+      why(e instanceof Error ? e.message : String(e));
       stats.failed++;
     }
   }

@@ -72,9 +72,15 @@ export async function mlQuote(token: string, ref: MlRef): Promise<MlQuote> {
   if (ref.kind === "product") {
     const p = await mlGet<{ status?: string; buy_box_winner?: { price?: number; item_id?: string } | null }>(token, `/products/${ref.id}`);
     const win = p.buy_box_winner;
-    if (!win) return { cents: null, active: false }; // catálogo sem ninguém vendendo
-    const direct = toCents(win.price);
-    return direct ? { cents: direct, active: true } : win.item_id ? itemQuote(token, win.item_id) : { cents: null, active: true };
+    const direct = toCents(win?.price);
+    if (direct) return { cents: direct, active: true };
+    if (win?.item_id) return itemQuote(token, win.item_id);
+    // Sem vendedor em destaque: o anúncio mais barato do catálogo.
+    const list = await mlGet<{ results?: { item_id?: string; price?: number }[] }>(token, `/products/${ref.id}/items?limit=5`);
+    const prices = (list.results ?? []).map((x) => toCents(x.price)).filter((c): c is number => c != null);
+    if (prices.length) return { cents: Math.min(...prices), active: true };
+    if (p.status && p.status !== "active") return { cents: null, active: false }; // catálogo desativado
+    return { cents: null, active: true };
   }
   // Produto do vendedor: acha um anúncio dele e usa o preço do anúncio.
   const up = await mlGet<{ user_id?: number; seller_id?: number }>(token, `/user-products/${ref.id}`);
