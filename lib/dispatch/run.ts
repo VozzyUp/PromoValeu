@@ -3,6 +3,7 @@ import "server-only";
 import { getIntegrationConfig } from "../data/integrations";
 import { sendImage, type UazapiConfig, sendText } from "../integrations/uazapi";
 import { sendMessage, sendPhoto } from "../integrations/telegram";
+import { freshEnoughToSend } from "../data/deal-check";
 import { db } from "../supabase/db";
 import { supabaseAdmin } from "../supabase/server";
 import { dealMeetsChannel, inSendWindow, renderMessage, type DispatchDeal } from "./format";
@@ -15,10 +16,10 @@ export type Channel = {
 type DealRow = {
   id: string; slug: string; code: string; title: string; price_cents: number | null; list_price_cents: number | null; coupon_code: string | null;
   coupon_percent: number | null; verdict: string; real_discount_bp: number | null; image_path: string | null; status: string;
-  store: { name: string } | null;
+  last_checked_at?: string | null; store: { name: string } | null;
 };
 
-const DEAL_COLS = "id, slug, code, title, price_cents, list_price_cents, coupon_code, coupon_percent, verdict, real_discount_bp, image_path, status, store:stores(name)";
+const DEAL_COLS = "id, slug, code, title, price_cents, list_price_cents, coupon_code, coupon_percent, verdict, real_discount_bp, image_path, status, last_checked_at, store:stores(name)";
 const FRESH_HOURS = 6;
 const MAX_ATTEMPTS = 3;
 
@@ -96,6 +97,13 @@ export async function runDispatch(now = new Date()): Promise<DispatchStats> {
       stats.skipped++;
       continue;
     }
+    // O canal é onde a confiança se ganha ou se perde: só envia com o preço conferido há menos de 15 min.
+    const check = await freshEnoughToSend(disp.deal.id, disp.deal.last_checked_at ?? null);
+    if (!check.send) {
+      await db().from("dispatches").update({ status: "skipped", error: check.reason ?? "A conferência antes do envio falhou." }).eq("id", disp.id);
+      stats.skipped++;
+      continue;
+    }
     try {
       const messageId = await deliver(ch, disp.deal);
       await db().from("dispatches").update({ status: "sent", sent_at: new Date().toISOString(), external_message_id: messageId, attempts: disp.attempts + 1, error: null }).eq("id", disp.id);
@@ -123,7 +131,7 @@ export async function sendTest(channelId: string): Promise<string> {
   if (row) return deliver(ch, row);
   const demo: DealRow = {
     id: "demo", slug: "teste", code: "teste", title: "Mensagem de teste do PromoValeu", price_cents: 9990, list_price_cents: 14990, coupon_code: null,
-    coupon_percent: null, verdict: "no_comparison", real_discount_bp: null, image_path: null, status: "published", store: { name: "Loja de teste" },
+    coupon_percent: null, verdict: "no_comparison", real_discount_bp: null, image_path: null, status: "published", last_checked_at: null, store: { name: "Loja de teste" },
   };
   return deliver(ch, demo);
 }

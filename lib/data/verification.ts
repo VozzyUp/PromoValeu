@@ -1,16 +1,13 @@
 // Histórico de preço, selos de verificação e revalidação periódica das ofertas no ar. Só Supabase.
 import "server-only";
-import { fetchLinkInfo, fetchPreview } from "../link-preview";
-import { checkPrice, paymentCondition, priceRoseTwice, priceWithCoupon, type PricePoint } from "../price-check";
-import { mlQuote } from "../integrations/mercadolivre";
-import { parseMlUrl } from "../ml-url";
-import { mlAccessToken } from "./integrations";
+import { fetchLinkInfo } from "../link-preview";
+import { checkPrice, paymentCondition, type PricePoint } from "../price-check";
 import { marketReference, refreshMarketPrice } from "./market";
 import { db } from "../supabase/db";
 import type { DealView } from "../types";
 import { JOIN, toViews, type DealJoinRow } from "./supabase";
 
-type SnapshotSource = "robot" | "recheck" | "post" | "feed";
+type SnapshotSource = "robot" | "recheck" | "post" | "feed" | "watch";
 
 /** Acha ou cria o anúncio da loja pela chave canônica do link. */
 export async function ensureListing(storeId: string, canonicalKey: string, externalId: string | null, canonicalUrl: string): Promise<string | null> {
@@ -87,11 +84,13 @@ export async function trackNewDeal(o: { dealId: string; storeId: string; urlKey:
     const listingId = await ensureListing(o.storeId, o.urlKey, o.externalId ?? null, o.url ?? o.urlKey);
     if (!listingId) return;
     await addSnapshot(listingId, o.priceCents, o.source);
-    const link = await db().from("deals").update({ listing_id: listingId }).eq("id", o.dealId);
+    // Primeira conferência na loja em 15 min; o produto passa a ser acompanhado por 60 dias (histórico).
+    const link = await db().from("deals").update({ listing_id: listingId, next_check_at: new Date(Date.now() + 15 * 60_000).toISOString() }).eq("id", o.dealId);
     if (link.error) {
       console.error("[verify] listing já tem oferta ativa", link.error.message);
       return;
     }
+    await db().from("listings").update({ tracked_until: new Date(Date.now() + 60 * 86400_000).toISOString() }).eq("id", listingId);
     await verifyDeal(o.dealId);
     // Mesmo produto no Mercado Livre: dá o selo já no primeiro dia quando a comparação é segura.
     if (await refreshMarketPrice(o.dealId).catch((e) => {
@@ -123,101 +122,6 @@ export async function getPriceHistory(dealId: string): Promise<{ points: History
     .filter((s) => !storeOnly || !((s.source === "post" || s.source === "robot") && new Date(s.captured_at).getTime() >= postedAt))
     .map((s) => ({ at: s.captured_at, priceCents: s.price_cents }));
   return { points, storeOnly };
-}
-
-export type RecheckStats = { checked: number; updated: number; expired: number; failed: number; reasons?: string[] };
-
-/** Confere de novo o preço das ofertas no ar (cada anúncio no máximo a cada 6 horas). */
-export async function recheckPublishedDeals(limit = 30): Promise<RecheckStats> {
-  const stats: RecheckStats = { checked: 0, updated: 0, expired: 0, failed: 0, reasons: [] };
-  // Motivos das falhas (até 8, sem repetir) ficam no histórico de execuções, para dar para entender sem ler o log do servidor.
-  const why = (msg: string) => {
-    const m = msg.slice(0, 160);
-    if (stats.reasons!.length < 8 && !stats.reasons!.includes(m)) stats.reasons!.push(m);
-  };
-  const cutoff = new Date(Date.now() - 6 * 3600_000).toISOString();
-  const { data, error } = await db().from("deals")
-    .select("id, price_cents, url_submitted, url_resolved, created_at, description, coupon_code, coupon_percent, coupon_amount_cents, listing:listings!deals_listing_id_fkey(id, checked_at)")
-    .eq("status", "published").not("listing_id", "is", null).not("price_cents", "is", null).limit(300);
-  if (error) throw error;
-  type R = {
-    id: string; price_cents: number; url_submitted: string | null; url_resolved: string | null; created_at: string; description: string | null;
-    coupon_code: string | null; coupon_percent: number | null; coupon_amount_cents: number | null;
-    listing: { id: string; checked_at: string | null } | null;
-  };
-  const due = (data as unknown as R[])
-    .filter((r) => r.listing && (!r.listing.checked_at || r.listing.checked_at < cutoff) && (r.url_resolved ?? r.url_submitted))
-    .sort((a, b) => (a.listing!.checked_at ?? "").localeCompare(b.listing!.checked_at ?? ""))
-    .slice(0, limit);
-
-  for (const r of due) {
-    stats.checked++;
-    try {
-      const url = (r.url_resolved ?? r.url_submitted)!;
-      // Mercado Livre bloqueia a página para robôs: com o app conectado, o preço vem da API oficial.
-      const ml = parseMlUrl(url);
-      const mlToken = ml ? await mlAccessToken() : null;
-      let preview: { priceCents: number | null } | null;
-      if (ml && mlToken) {
-        const q = await mlQuote(mlToken, ml).catch((e) => {
-          why(`ML ${ml.id}: ${e instanceof Error ? e.message : String(e)}`);
-          return null;
-        });
-        if (q && !q.active) {
-          await db().from("deals").update({ status: "expired", expired_reason: "Anúncio pausado ou encerrado no Mercado Livre" }).eq("id", r.id);
-          stats.expired++;
-          continue;
-        }
-        if (q && q.cents == null) why(`ML ${ml.id}: a API não informou preço`);
-        // Teste: a consulta de promoções (onde aparece o Pix) responde para anúncios de outros vendedores?
-        if (q?.promoProbe) why(`Pix: ${q.promoProbe}${q.pixCents ? ` (R$ ${(q.pixCents / 100).toFixed(2)})` : ""}`);
-        preview = q ? { priceCents: q.cents } : null;
-      } else {
-        preview = await fetchPreview(url);
-        if (!preview || preview.priceCents == null) why(`${new URL(url).hostname}: a página da loja não mostrou o preço`);
-        // Outra loja: o preço do mesmo produto no Mercado Livre entra na conta do selo.
-        if (await refreshMarketPrice(r.id).catch((e) => {
-          why(`comparação ML: ${e instanceof Error ? e.message : String(e)}`);
-          return false;
-        })) await verifyDeal(r.id);
-      }
-      if (!preview || preview.priceCents == null) {
-        await db().from("listings").update({ checked_at: new Date().toISOString() }).eq("id", r.listing!.id);
-        stats.failed++;
-        continue;
-      }
-      await addSnapshot(r.listing!.id, preview.priceCents, "recheck");
-      stats.updated++;
-      const last = await db().from("price_snapshots").select("price_cents")
-        .eq("listing_id", r.listing!.id).eq("source", "recheck").order("captured_at", { ascending: false }).limit(2);
-      const lastTwo = ((last.data ?? []) as { price_cents: number }[]).map((s) => s.price_cents);
-      // O preço da oferta pode ser com cupom: a vitrine maior não quer dizer que a oferta acabou.
-      const coupon = { code: r.coupon_code, percent: r.coupon_percent, amountCents: r.coupon_amount_cents };
-      const withCoupon = lastTwo.map((p) => priceWithCoupon(p, coupon, r.price_cents));
-      let rose: boolean;
-      // Preço no Pix, à vista ou só no app não aparece na loja nem na API: aí vale comparar a loja com ela mesma.
-      if (withCoupon.every((x) => x.known) && !paymentCondition(r.description)) {
-        rose = priceRoseTwice(r.price_cents, withCoupon.map((x) => x.cents));
-      } else {
-        // Cupom de valor desconhecido ou condição de pagamento: compara a vitrine com a primeira vitrine lida depois da oferta.
-        const first = await db().from("price_snapshots").select("price_cents")
-          .eq("listing_id", r.listing!.id).eq("source", "recheck").gte("captured_at", r.created_at).order("captured_at").limit(1).maybeSingle();
-        const base = (first.data as { price_cents: number } | null)?.price_cents ?? null;
-        rose = base != null && priceRoseTwice(base, lastTwo);
-      }
-      if (rose) {
-        await db().from("deals").update({ status: "expired", expired_reason: "O preço na loja subiu" }).eq("id", r.id);
-        stats.expired++;
-      } else {
-        await verifyDeal(r.id);
-      }
-    } catch (e) {
-      console.error("[recheck]", r.id, e);
-      why(e instanceof Error ? e.message : String(e));
-      stats.failed++;
-    }
-  }
-  return stats;
 }
 
 /** Expira o que passou da data de fim. */

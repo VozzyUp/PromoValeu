@@ -5,6 +5,7 @@ import { redirectToPath } from "@/lib/redirect";
 import { outboundUrl } from "@/lib/affiliate";
 import { getStoreAffiliateTemplate } from "@/lib/data/supabase";
 import { supabaseEnabled } from "@/lib/supabase/server";
+import { requestCheck } from "@/lib/data/deal-check";
 
 const CHANNELS = new Set(["site", "telegram", "whatsapp", "instagram", "other"]);
 
@@ -36,6 +37,8 @@ export async function GET(request: Request, ctx: RouteContext<"/ir/[code]">) {
   const c = new URL(request.url).searchParams.get("c") ?? "site";
   if (!(await isLikelyBot())) {
     await recordClick(deal.id, await visitorHash(), CHANNELS.has(c) ? c : "other");
+    // Oferta clicada é conferida mais: se a última conferência passou de 30 min, entra na fila agora.
+    if (supabaseEnabled()) void requestCheck(deal.id, 30);
   }
   // Oferta sem link (ex.: promoção só em loja física): fica na página da oferta.
   if (!deal.urlSubmitted) return redirectToPath(`/oferta/${deal.slug}`, 302);

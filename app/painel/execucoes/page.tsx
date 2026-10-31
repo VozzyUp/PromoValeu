@@ -32,6 +32,7 @@ export default async function PanelRunsPage() {
         <h2 id="agora" className="text-title font-bold">Rodar agora</h2>
         <RunNow job="expire" label="Expirar vencidas" />
         <RunNow job="recheck" label="Reconferir preços" />
+        <RunNow job="watch" label="Gravar preço dos produtos acompanhados (histórico)" />
         <RunNow job="dispatch" label="Enviar para os canais" />
         <RunNow job="sync:shopee" label="Sincronizar vendas da Shopee" />
         <RunNow job="newsletter" label={`Enviar o boletim agora${subs ? ` (${subs.active} inscritos ativos, ${subs.pending} aguardando confirmação)` : ""}`} />

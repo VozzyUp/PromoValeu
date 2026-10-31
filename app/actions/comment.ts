@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { getProfile } from "@/lib/data";
 import { syncBadges } from "@/lib/data/gamification";
+import { requestCheck } from "@/lib/data/deal-check";
 import {
   countCommentsSince, createComment, getCommentTarget, getDealSlugById, hasSameRecentComment, markDealExpired, pathForTarget,
   reactToComment, removeComment, reportComment, reportDeal, setSubscription,
@@ -99,6 +100,8 @@ export async function reportAction(input: unknown): Promise<{ message: string } 
     if (r.target === "deal") {
       const result = await reportDeal(r.id, session.userId, r.kind, r.note || null);
       if (result === "not_found") return { error: "Essa oferta não está mais no ar." };
+      // Aviso de preço mudou, acabou ou cupom falhou: confere na loja já (se a última conferência passou de 10 min).
+      if (result === "ok" && (r.kind === "out_of_stock" || r.kind === "coupon_failed" || r.kind === "price_changed")) await requestCheck(r.id, 10);
       const slug = await getDealSlugById(r.id);
       if (slug) revalidatePath(`/oferta/${slug}`);
       revalidatePath("/");

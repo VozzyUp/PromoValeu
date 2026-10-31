@@ -25,6 +25,9 @@ import { listDeals } from "@/lib/data/browse";
 import { getProfile } from "@/lib/data";
 import { getPriceHistory, listSameProductDeals } from "@/lib/data/verification";
 import { SameProductDeals } from "@/components/same-product-deals";
+import { CheckStatus } from "@/components/check-status";
+import { DealFeedback } from "@/components/deal-feedback";
+import { getDealCheckInfo } from "@/lib/data/deal-check";
 
 export async function generateMetadata({ params }: PageProps<"/oferta/[slug]">) {
   const { slug } = await params;
@@ -56,7 +59,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/ofe
   const expired = deal.status === "expired";
   const live = deal.status === "published" || expired;
   // Tudo de uma vez: cada consulta vai até o banco, e uma depois da outra a página levava mais de 1 segundo.
-  const [history, related, author, sameProduct, thread, subscribed, saved, gallery] = await Promise.all([
+  const [history, related, author, sameProduct, thread, subscribed, saved, gallery, checkInfo] = await Promise.all([
     db ? getPriceHistory(deal.id).catch(() => ({ points: [], storeOnly: false })) : Promise.resolve({ points: [], storeOnly: false }),
     // Ofertas parecidas (mesma categoria, as mais quentes) e dados do autor: só com o banco de verdade.
     db ? listDeals({ viewerId: null, tab: "quentes", page: 1, categoryId: deal.category?.id }).then((r) => r.items.filter((d) => d.id !== deal.id).slice(0, 4)).catch(() => []) : Promise.resolve([]),
@@ -66,6 +69,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/ofe
     live && session ? isSubscribed(deal.id, session.userId) : Promise.resolve(false),
     session ? savedSet(session.userId, [deal.id]).then((set) => set.has(deal.id)) : Promise.resolve(false),
     db ? listDealGallery(deal.id) : Promise.resolve([]),
+    db && deal.status === "published" && deal.priceCents != null && deal.urlSubmitted ? getDealCheckInfo(deal.id).catch(() => null) : Promise.resolve(null),
   ]);
   const jsonLd = dealJsonLd(deal, process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000");
   const canClose = !!session && (session.userId === deal.authorId || session.role === "admin" || session.role === "moderator");
@@ -116,6 +120,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/ofe
             ) : null}
             <h1 id="deal-title" className="text-xl font-bold">{deal.title}</h1>
             <PriceBlock deal={deal} size="page" />
+            {checkInfo ? <CheckStatus info={checkInfo} /> : null}
             <p className="text-sm text-muted">
               Disponível em <strong className="text-text">{deal.store.name}</strong>
               {deal.availability === "offline" ? " · loja física" : ""}
@@ -138,6 +143,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/ofe
                 <GoToDealLink code={deal.code} size="lg" />
               )}
             </div>
+            {deal.status === "published" && deal.urlSubmitted ? <DealFeedback dealId={deal.id} code={deal.code} hasCoupon={!!deal.couponCode} /> : null}
           </div>
         </div>
       </article>

@@ -41,7 +41,8 @@ type Due = { job: string; every?: number; at?: string };
 const FIXED: Due[] = [
   { job: "dispatch", every: 1 },
   { job: "expire", every: 5 },
-  { job: "recheck", every: 30 },
+  { job: "recheck", every: 5 },
+  { job: "watch", at: "20 * * * *" }, // de hora em hora; cada produto é lido no máximo a cada 11 h
   { job: "sync:shopee", at: "10 * * * *" },
   { job: "cleanup", at: "30 3 * * *" },
   { job: "newsletter", at: "0,15,30 9 * * 1" }, // segunda, 9h (Brasília); os 3 horários cobrem listas grandes, sem repetir quem já recebeu

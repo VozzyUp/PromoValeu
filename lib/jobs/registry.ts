@@ -1,6 +1,7 @@
 // Lista dos jobs que o agendador e o botão "rodar agora" conhecem.
 import "server-only";
-import { expireDueDeals, recheckPublishedDeals } from "../data/verification";
+import { expireDueDeals } from "../data/verification";
+import { runCheckQueue, runWatch } from "../data/deal-check";
 import { runNewsletter } from "../data/newsletter";
 import { runDispatch } from "../dispatch/run";
 import { runShopeeRule } from "../robot/shopee";
@@ -28,9 +29,15 @@ export const JOBS: Record<string, JobFn> = {
     const s = await runNewsletter();
     return { stats: { ...s }, partial: s.failed > 0 && s.sent > 0 };
   },
+  // Fila da conferência: novas (15 min, 1 h, 3 h), clicadas, denunciadas e depois a cada 6 h.
   recheck: async () => {
-    const s = await recheckPublishedDeals();
-    return { stats: { ...s }, partial: s.failed > 0 && s.updated > 0 };
+    const s = await runCheckQueue();
+    return { stats: { ...s }, partial: s.failed > 0 && s.checked > s.failed };
+  },
+  // Histórico: preço dos produtos que já tiveram oferta, 2x por dia, mesmo depois que a oferta acaba.
+  watch: async () => {
+    const s = await runWatch();
+    return { stats: { ...s }, partial: s.failed > 0 && s.saved > 0 };
   },
 };
 
