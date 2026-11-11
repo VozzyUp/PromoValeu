@@ -72,7 +72,7 @@ export default async function PanelSourcesPage() {
           Publicações sem link de loja, repetidas ou fora dos filtros ficam listadas abaixo com o motivo.
         </p>
         <p className="mt-2 text-sm text-muted">
-          WhatsApp: usa o número conectado na integração da UAZAPI. Canais: cole o link do canal. Grupos: o número precisa estar no grupo.
+          WhatsApp: usa o número conectado na integração do WhatsApp. Canais: cole o link do canal. Grupos: o número precisa estar no grupo.
         </p>
       </div>
 

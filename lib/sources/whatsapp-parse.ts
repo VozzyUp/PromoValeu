@@ -1,4 +1,4 @@
-// Mensagens de canais e grupos do WhatsApp (pela UAZAPI) no mesmo formato das publicações do Telegram.
+// Mensagens de canais e grupos do WhatsApp (do WhatsApp conectado) no mesmo formato das publicações do Telegram.
 // Funções puras, testadas em tests/sources-whatsapp.test.ts.
 import type { RawPost } from "./types";
 

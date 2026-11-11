@@ -29,7 +29,7 @@ export function ChannelForm({ ch }: { ch: ChannelValues }) {
         <div><label htmlFor={`n-${k}`} className="mb-1 block text-sm font-bold">Nome</label><input id={`n-${k}`} name="name" defaultValue={ch.name} required className={input} /></div>
         <div>
           <label htmlFor={`t-${k}`} className="mb-1 block text-sm font-bold">Tipo</label>
-          <select id={`t-${k}`} name="type" defaultValue={ch.type} className={input}><option value="telegram">Telegram</option><option value="whatsapp">WhatsApp (UAZAPI)</option></select>
+          <select id={`t-${k}`} name="type" defaultValue={ch.type} className={input}><option value="telegram">Telegram</option><option value="whatsapp">WhatsApp</option></select>
         </div>
         <div className="md:col-span-2"><label htmlFor={`g-${k}`} className="mb-1 block text-sm font-bold">Destino (Telegram: @canal ou id do chat · WhatsApp: link do canal, link de convite do grupo ou número)</label><input id={`g-${k}`} name="target" defaultValue={ch.target} required className={input} /></div>
         <div>

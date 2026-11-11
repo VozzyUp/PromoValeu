@@ -1,4 +1,4 @@
-// Leitura de canais e grupos do WhatsApp pela UAZAPI (o mesmo número que envia para os nossos canais).
+// Leitura de canais e grupos do WhatsApp do WhatsApp conectado (o mesmo número que envia para os nossos canais).
 import "server-only";
 import { getIntegrationConfig } from "../data/integrations";
 import {
@@ -13,7 +13,7 @@ export type WhatsappKind = "whatsapp_channel" | "whatsapp_group";
 
 export async function uazapiConfig(): Promise<UazapiConfig> {
   const cfg = await getIntegrationConfig<UazapiConfig>("uazapi");
-  if (!cfg?.baseUrl || !cfg?.token) throw new Error("Ligue a integração do WhatsApp (UAZAPI) em Painel > Integrações.");
+  if (!cfg?.baseUrl || !cfg?.token) throw new Error("Ligue a integração do WhatsApp em Painel > Integrações.");
   return cfg;
 }
 
@@ -55,7 +55,7 @@ export async function whatsappGroups(): Promise<{ jid: string; name: string }[]>
   return groups.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 }
 
-/** Grupo pelo link de convite (chat.whatsapp.com/...). O número da UAZAPI precisa estar no grupo para enviar. */
+/** Grupo pelo link de convite (chat.whatsapp.com/...). O número do WhatsApp conectado precisa estar no grupo para enviar. */
 export async function resolveGroup(input: string): Promise<string> {
   const code = groupInviteCode(input);
   if (!code) throw new Error("Cole o link de convite do grupo (https://chat.whatsapp.com/...).");

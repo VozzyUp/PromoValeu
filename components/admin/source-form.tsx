@@ -58,7 +58,7 @@ export function SourceForm({ source, categories, accountConnected }: { source: S
             {loadingGroups ? "Carregando…" : "Carregar os grupos do WhatsApp"}
           </button>
           <p role="status" className={`text-sm ${groups?.error ? "text-danger" : "text-muted"}`}>
-            {groups?.error ?? (groups?.groups ? `${groups.groups.length} grupos. O número da UAZAPI precisa estar no grupo.` : "O número conectado na UAZAPI precisa estar no grupo.")}
+            {groups?.error ?? (groups?.groups ? `${groups.groups.length} grupos. O número do WhatsApp conectado precisa estar no grupo.` : "O número do WhatsApp conectado precisa estar no grupo.")}
           </p>
         </form>
       ) : null}

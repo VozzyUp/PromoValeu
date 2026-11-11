@@ -23,10 +23,10 @@ export const INTEGRATIONS: IntegrationDef[] = [
   },
   {
     key: "uazapi",
-    title: "WhatsApp (UAZAPI)",
-    help: "Endereço do servidor e token da instância que envia para o canal ou grupo.",
+    title: "WhatsApp (ZapCoder ou UAZAPI)",
+    help: "Endereço do servidor e token da instância que envia para o canal ou grupo. Na ZapCoder: endereço https://zapcoder.cloud e o token da instância (não o token da conta).",
     fields: [
-      { name: "baseUrl", label: "Endereço do servidor", secret: false, placeholder: "https://seu-servidor.uazapi.com" },
+      { name: "baseUrl", label: "Endereço do servidor", secret: false, placeholder: "https://zapcoder.cloud" },
       { name: "token", label: "Token da instância", secret: true },
     ],
   },

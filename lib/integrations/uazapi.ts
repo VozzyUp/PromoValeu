@@ -1,4 +1,4 @@
-// Cliente mínimo da UAZAPI (WhatsApp).
+// Cliente mínimo da API de WhatsApp (ZapCoder/UAZAPI, mesmo formato).
 import "server-only";
 
 export type UazapiConfig = { baseUrl: string; token: string };
@@ -11,7 +11,7 @@ async function call<T>(cfg: UazapiConfig, path: string, body?: Record<string, un
     signal: AbortSignal.timeout(20_000),
   });
   const json = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
-  if (!res.ok || !json) throw new Error(`UAZAPI respondeu ${res.status}${json?.error ? `: ${json.error}` : ""}`);
+  if (!res.ok || !json) throw new Error(`WhatsApp (API) respondeu ${res.status}${json?.error ? `: ${json.error}` : ""}`);
   return json;
 }
 

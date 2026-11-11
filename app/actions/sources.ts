@@ -153,7 +153,7 @@ export async function loadChatsAction(): Promise<ChatsState> {
   }
 }
 
-/** Grupos do WhatsApp em que o número da UAZAPI participa. */
+/** Grupos do WhatsApp em que o número do WhatsApp conectado participa. */
 export async function loadWhatsappGroupsAction(): Promise<GroupsState> {
   await requireAdmin();
   try {
