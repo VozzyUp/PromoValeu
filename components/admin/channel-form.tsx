@@ -9,11 +9,12 @@ const input = "h-10 w-full rounded-sm border border-border-input bg-bg px-2 text
 export type ChannelValues = {
   id?: string; name: string; type: "telegram" | "whatsapp"; target: string; active: boolean; minVerdict: "any" | "verified" | "good_price";
   minDiscountPct: number; windowStart: string; windowEnd: string; maxPerHour: number; template: string; linkMode: "site" | "direct";
+  minIntervalMin: number | null;
 };
 
 export const NEW_CHANNEL: ChannelValues = {
   name: "", type: "telegram", target: "", active: false, minVerdict: "any", minDiscountPct: 20, windowStart: "08:00", windowEnd: "22:00",
-  maxPerHour: 6, template: DEFAULT_TEMPLATE, linkMode: "site",
+  maxPerHour: 6, template: DEFAULT_TEMPLATE, linkMode: "site", minIntervalMin: null,
 };
 
 export function ChannelForm({ ch }: { ch: ChannelValues }) {
@@ -42,6 +43,11 @@ export function ChannelForm({ ch }: { ch: ChannelValues }) {
         <div><label htmlFor={`ws-${k}`} className="mb-1 block text-sm font-bold">Enviar a partir de (Brasília)</label><input id={`ws-${k}`} name="windowStart" defaultValue={ch.windowStart} className={input} /></div>
         <div><label htmlFor={`we-${k}`} className="mb-1 block text-sm font-bold">Enviar até</label><input id={`we-${k}`} name="windowEnd" defaultValue={ch.windowEnd} className={input} /></div>
         <div><label htmlFor={`h-${k}`} className="mb-1 block text-sm font-bold">Máximo por hora</label><input id={`h-${k}`} name="maxPerHour" type="number" min={1} max={60} defaultValue={ch.maxPerHour} className={input} /></div>
+        <div>
+          <label htmlFor={`i-${k}`} className="mb-1 block text-sm font-bold">Intervalo mínimo entre mensagens (minutos)</label>
+          <input id={`i-${k}`} name="minIntervalMin" type="number" min={1} max={1440} step={1} defaultValue={ch.minIntervalMin ?? ""} placeholder="Automático: 60 ÷ limite por hora" className={input} />
+          <p className="mt-1 text-xs text-muted">Vazio: o site espaça sozinho (ex.: 20 por hora = 1 a cada 3 min).</p>
+        </div>
         <div>
           <label htmlFor={`l-${k}`} className="mb-1 block text-sm font-bold">O link da mensagem leva para</label>
           <select id={`l-${k}`} name="linkMode" defaultValue={ch.linkMode} className={input}><option value="site">A página da oferta no site</option><option value="direct">A loja (passando pelo nosso contador de cliques)</option></select>

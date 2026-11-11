@@ -1,4 +1,4 @@
-// Fila de envio para Telegram e WhatsApp: escolhe as ofertas de cada canal, respeita horário e limite por hora, e envia uma por vez.
+// Fila de envio para Telegram e WhatsApp: escolhe as ofertas de cada canal, respeita horário, limite por hora e intervalo entre mensagens, e envia uma por vez.
 import "server-only";
 import { getIntegrationConfig } from "../data/integrations";
 import { sendImage, type UazapiConfig, sendText } from "../integrations/uazapi";
@@ -7,10 +7,13 @@ import { freshEnoughToSend } from "../data/deal-check";
 import { db } from "../supabase/db";
 import { supabaseAdmin } from "../supabase/server";
 import { dealMeetsChannel, inSendWindow, renderMessage, type DispatchDeal } from "./format";
+import { canSendNow, minGapMs } from "./spacing";
 
 export type Channel = {
   id: string; name: string; type: "telegram" | "whatsapp"; target: string; active: boolean; min_verdict: "any" | "verified" | "good_price";
   min_discount_bp: number; window_start: string; window_end: string; max_per_hour: number; template: string; link_mode: "site" | "direct";
+  // Só existe depois do SQL do intervalo; sem a coluna vem indefinido e vale a conta automática.
+  min_interval_min?: number | null;
 };
 
 type DealRow = {
@@ -87,6 +90,11 @@ export async function runDispatch(now = new Date()): Promise<DispatchStats> {
     const lastHour = await db().from("dispatches").select("id", { count: "exact", head: true })
       .eq("channel_id", ch.id).eq("status", "sent").gte("sent_at", new Date(now.getTime() - 3600_000).toISOString());
     if ((lastHour.count ?? 0) >= ch.max_per_hour) continue;
+    // Espaça a fila: não envia antes do intervalo mínimo desde a última mensagem do canal.
+    const last = await db().from("dispatches").select("sent_at").eq("channel_id", ch.id).eq("status", "sent")
+      .not("sent_at", "is", null).order("sent_at", { ascending: false }).limit(1).maybeSingle();
+    const lastSentAt = (last.data as { sent_at: string | null } | null)?.sent_at ?? null;
+    if (!canSendNow(lastSentAt, now, minGapMs(ch.max_per_hour, ch.min_interval_min))) continue;
 
     const next = await db().from("dispatches").select(`id, attempts, deal:deals(${DEAL_COLS})`)
       .eq("channel_id", ch.id).eq("status", "queued").lte("next_attempt_at", now.toISOString()).order("created_at").limit(1).maybeSingle();

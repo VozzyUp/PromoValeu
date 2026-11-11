@@ -42,6 +42,10 @@ export async function saveChannelAction(_prev: ChannelState, form: FormData): Pr
   if (!Number.isFinite(discount) || discount < 0 || discount > 95) return { error: "Desconto mínimo de 0 a 95." };
   if (!Number.isInteger(perHour) || perHour < 1 || perHour > 60) return { error: "Limite por hora de 1 a 60." };
   if (!TIME.test(start) || !TIME.test(end)) return { error: "Horários no formato 08:00." };
+  // Intervalo entre mensagens: vazio deixa o site espaçar sozinho.
+  const gapRaw = String(form.get("minIntervalMin") ?? "").trim();
+  const gap = gapRaw === "" ? null : Number(gapRaw);
+  if (gap !== null && (!Number.isInteger(gap) || gap < 1 || gap > 1440)) return { error: "Intervalo mínimo de 1 a 1440 minutos, sem vírgula (ou deixe vazio)." };
   const template = String(form.get("template") ?? "").trim().slice(0, 1500);
   if (!template.includes("{link}")) return { error: "O modelo da mensagem precisa ter {link}." };
 
@@ -49,7 +53,13 @@ export async function saveChannelAction(_prev: ChannelState, form: FormData): Pr
     name, type, target, active: form.get("active") === "on", min_verdict: minVerdict, min_discount_bp: Math.round(discount * 100),
     window_start: start, window_end: end, max_per_hour: perHour, template, link_mode: form.get("linkMode") === "direct" ? "direct" : "site",
   };
-  const { error } = UUID.test(id) ? await db().from("channels").update(row).eq("id", id) : await db().from("channels").insert(row);
+  const save = (r: Record<string, unknown>) => (UUID.test(id) ? db().from("channels").update(r).eq("id", id) : db().from("channels").insert(r));
+  let { error } = await save({ ...row, min_interval_min: gap });
+  // Coluna do intervalo ainda não criada: com o campo vazio salva o resto; com valor, avisa para rodar o SQL.
+  if (error && (error.code === "PGRST204" || error.code === "42703" || /min_interval_min/.test(error.message))) {
+    if (gap !== null) return { error: "Rode o SQL do intervalo no Supabase antes de usar este campo." };
+    ({ error } = await save(row));
+  }
   if (error) return { error: error.message };
   revalidatePath("/painel/canais");
   return { ok: true };

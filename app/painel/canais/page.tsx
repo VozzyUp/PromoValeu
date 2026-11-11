@@ -24,13 +24,14 @@ export default async function PanelChannelsPage() {
   const toValues = (c: Channel): ChannelValues => ({
     id: c.id, name: c.name, type: c.type, target: c.target, active: c.active, minVerdict: c.min_verdict, minDiscountPct: c.min_discount_bp / 100,
     windowStart: c.window_start.slice(0, 5), windowEnd: c.window_end.slice(0, 5), maxPerHour: c.max_per_hour, template: c.template, linkMode: c.link_mode,
+    minIntervalMin: c.min_interval_min ?? null,
   });
   return (
     <div className="mx-auto flex max-w-(--layout-max) flex-col gap-6 px-4 py-8">
       <div>
         <h1 className="text-xl font-bold">Canais de envio</h1>
         <p className="text-sm text-muted">
-          Toda oferta que entra no ar e cumpre as regras do canal vai para a fila e sai uma por vez, dentro do horário e do limite por hora. Nunca repete a mesma oferta no mesmo canal.
+          Toda oferta que entra no ar e cumpre as regras do canal vai para a fila e sai uma por vez, dentro do horário e do limite por hora, com um intervalo entre uma mensagem e outra. Nunca repete a mesma oferta no mesmo canal.
           Ligue a integração do Telegram ou do WhatsApp em Integrações.
         </p>
       </div>
