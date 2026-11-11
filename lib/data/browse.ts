@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "../supabase/db";
 import type { Category, DealView, Store } from "../types";
 import { ignoredAuthorIds } from "./relations";
+import { searchTsQuery } from "../search-query";
 import { JOIN, toViews, listCategories, listStores, type DealJoinRow } from "./supabase";
 
 export type BrowseTab = "quentes" | "novas" | "descontos";
@@ -30,7 +31,8 @@ export async function listDeals(o: BrowseOpts): Promise<{ items: DealView[]; has
   if (o.storeId) q = q.eq("store_id", o.storeId);
   if (o.coupons) q = q.not("coupon_code", "is", null);
   if (o.free) q = q.eq("price_cents", 0);
-  if (o.query) q = q.textSearch("search", o.query.slice(0, 80), { type: "websearch", config: "pt_unaccent" });
+  const tsq = o.query ? searchTsQuery(o.query) : null;
+  if (tsq) q = q.textSearch("search", tsq, { config: "pt_unaccent" });
   if (o.viewerId) {
     const ignored = await ignoredAuthorIds(o.viewerId);
     if (ignored.length) q = q.or(`author_id.is.null,author_id.not.in.(${ignored.join(",")})`);
