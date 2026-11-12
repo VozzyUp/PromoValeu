@@ -6,6 +6,7 @@ import { isHostBlocked } from "../data/admin";
 import { autoCategoryId } from "../data/auto-category";
 import { mlAccessToken } from "../data/integrations";
 import { mlQuote, mlTitle } from "../integrations/mercadolivre";
+import { downloadMedia } from "../integrations/uazapi";
 import { parseMlUrl } from "../ml-url";
 import { notifyPublished, saveDealImages } from "../data/publish";
 import { linkDealToProduct, trackNewDeal } from "../data/verification";
@@ -24,7 +25,7 @@ import { readAccountPosts, withAccount } from "./telegram-account";
 import { channelLabel } from "./parse-web";
 import { fetchPublicChannel } from "./telegram-web";
 import type { RawPost } from "./types";
-import { readWhatsappPosts } from "./whatsapp";
+import { readWhatsappPosts, uazapiConfig } from "./whatsapp";
 
 const MAX_AGE_MS = 24 * 3600_000; // publicação mais velha que isso provavelmente já acabou
 const REPOST_DAYS = 14;
@@ -61,6 +62,20 @@ function couponTitle(c: CouponInfo, storeName: string): string {
 
 const fit = (t: string) => (t.length > 140 ? `${t.slice(0, 137)}...` : t);
 
+async function whatsappImage(mediaId: string): Promise<Uint8Array | null> {
+  try {
+    const m = await downloadMedia(await uazapiConfig(), mediaId);
+    if (m.mimetype && !/^image\//i.test(m.mimetype)) return null;
+    if (m.base64) {
+      const bytes = new Uint8Array(Buffer.from(m.base64, "base64"));
+      return bytes.length > 0 && bytes.length <= IMAGE_MAX ? bytes : null;
+    }
+    return m.url ? await fetchImageBytes(m.url, IMAGE_MAX) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function runSource(id: string): Promise<SourceStats> {
   const { data, error } = await db().from("sources").select("*").eq("id", id).maybeSingle();
   if (error) throw error;
@@ -75,7 +90,8 @@ export async function runSource(id: string): Promise<SourceStats> {
     }
     if (src.kind === "whatsapp_channel" || src.kind === "whatsapp_group") {
       const posts = await readWhatsappPosts(src.kind, src.target);
-      return await processPosts(src, posts, async () => null); // a foto vem da página da loja
+      // Primeira escolha é a foto da página da loja; se ela bloquear, usa a imagem anexada à mensagem.
+      return await processPosts(src, posts, async (p) => (p.mediaId && !offline() ? whatsappImage(p.mediaId) : null));
     }
     return await withAccount(async (c) => {
       const { posts, photo } = await readAccountPosts(c, src.target, src.last_message_id, 40);

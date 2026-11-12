@@ -8,4 +8,5 @@ export type RawPost = {
   strike: string[]; // trechos riscados (costuma ser o preço antigo)
   imageUrl: string | null; // foto pública (só na página do canal)
   postUrl: string | null; // endereço da publicação no Telegram
+  mediaId?: string; // WhatsApp: id da mensagem que traz uma imagem (para baixar pela API)
 };

@@ -5,7 +5,7 @@ import type { RawPost } from "./types";
 /** Post de canal como /newsletter/messages devolve. */
 export type ChannelItem = { serverid?: number; timestamp?: string; message?: Record<string, unknown> | null };
 /** Mensagem de grupo como /message/find devolve. */
-export type GroupMessage = { messageTimestamp?: number; text?: string | null; fromMe?: boolean; messageType?: string; content?: unknown };
+export type GroupMessage = { messageTimestamp?: number; text?: string | null; fromMe?: boolean; messageType?: string; content?: unknown; messageid?: string; id?: string };
 
 const URL_RE = /https?:\/\/[^\s<>"'*~]+/gi;
 const CHAT_HOSTS = /^https?:\/\/(www\.)?(wa\.me|chat\.whatsapp\.com|whatsapp\.com|api\.whatsapp\.com|t\.me|telegram\.me)\//i;
@@ -54,9 +54,42 @@ export function extractLinks(text: string): string[] {
   return out;
 }
 
-function toPost(id: number, postedAt: Date | null, raw: string): RawPost {
+function toPost(id: number, postedAt: Date | null, raw: string, mediaId?: string): RawPost {
   const { text, bold, strike } = stripFormatting(raw);
-  return { id, postedAt, text, links: extractLinks(text), bold, strike, imageUrl: null, postUrl: null };
+  const post: RawPost = { id, postedAt, text, links: extractLinks(text), bold, strike, imageUrl: null, postUrl: null };
+  if (mediaId) post.mediaId = mediaId;
+  return post;
+}
+
+/** A mensagem de grupo traz uma imagem? */
+function hasImage(m: GroupMessage): boolean {
+  if (typeof m.messageType === "string" && /image/i.test(m.messageType)) return true;
+  const c = m.content;
+  return !!c && typeof c === "object" && ("imageMessage" in c || "mimetype" in c && /^image\//i.test(String((c as Record<string, unknown>).mimetype)));
+}
+
+/** Resposta de /message/download em bytes ou endereço (aceita vários nomes de campo e data: URL). */
+export function parseMediaResponse(resp: unknown): { url?: string; base64?: string; mimetype?: string } {
+  if (!resp || typeof resp !== "object") return {};
+  const r = resp as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+  let mimetype = str(r.mimetype) ?? str(r.mimeType);
+  let base64: string | undefined;
+  let url: string | undefined;
+  const fromData = (v: string) => {
+    const m = /^data:([^;,]+)?(?:;[^,]*)?;base64,([\s\S]*)$/i.exec(v);
+    if (!m) return false;
+    base64 = m[2];
+    mimetype = mimetype ?? m[1];
+    return true;
+  };
+  for (const k of ["base64Data", "base64", "data"]) {
+    const v = str(r[k]);
+    if (v && !base64) { if (!fromData(v)) base64 = v; }
+  }
+  const f = str(r.fileURL) ?? str(r.fileUrl);
+  if (f && !fromData(f)) url = f;
+  return { ...(url ? { url } : {}), ...(base64 ? { base64 } : {}), ...(mimetype ? { mimetype } : {}) };
 }
 
 /** Posts de canal, do mais antigo para o mais novo. O número do post (serverid) cresce sempre. */
@@ -79,7 +112,8 @@ export function groupPosts(messages: GroupMessage[]): RawPost[] {
     if (m.fromMe || !Number.isInteger(m.messageTimestamp) || (m.messageTimestamp ?? 0) <= 0) continue;
     const raw = typeof m.text === "string" && m.text.trim() ? m.text : "";
     if (!raw) continue;
-    out.push(toPost(m.messageTimestamp as number, new Date(m.messageTimestamp as number), raw));
+    const mediaId = hasImage(m) ? m.messageid || m.id || undefined : undefined;
+    out.push(toPost(m.messageTimestamp as number, new Date(m.messageTimestamp as number), raw, mediaId));
   }
   return out.sort((a, b) => a.id - b.id);
 }

@@ -1,5 +1,6 @@
 // Cliente mínimo da API de WhatsApp (ZapCoder/UAZAPI, mesmo formato).
 import "server-only";
+import { parseMediaResponse } from "../sources/whatsapp-parse";
 
 export type UazapiConfig = { baseUrl: string; token: string };
 
@@ -50,6 +51,11 @@ export async function listGroups(cfg: UazapiConfig): Promise<{ jid: string; name
 export async function findMessages(cfg: UazapiConfig, chatid: string, limit = 60): Promise<unknown[]> {
   const r = await call<{ messages?: unknown[] }>(cfg, "/message/find", { chatid, limit, offset: 0 });
   return Array.isArray(r.messages) ? r.messages : [];
+}
+
+/** Baixa a mídia de uma mensagem (endereço válido por 2 dias, ou base64). */
+export async function downloadMedia(cfg: UazapiConfig, id: string): Promise<{ url?: string; base64?: string; mimetype?: string }> {
+  return parseMediaResponse(await call<unknown>(cfg, "/message/download", { id, return_base64: true }));
 }
 
 /** Dados do grupo pelo link de convite, sem entrar nele. */

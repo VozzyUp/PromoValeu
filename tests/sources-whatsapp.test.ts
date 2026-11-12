@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parsePost } from "../lib/sources/parse-post";
 import {
-  channelInviteKey, channelJid, findGroupJid, groupInviteCode, channelPosts, extractLinks, groupPosts, messageText, readChannelInfo, stripFormatting,
+  channelInviteKey, channelJid, findGroupJid, groupInviteCode, channelPosts, extractLinks, groupPosts, messageText, parseMediaResponse, readChannelInfo, stripFormatting,
 } from "../lib/sources/whatsapp-parse";
 
 const OFFER = [
@@ -137,5 +137,25 @@ describe("mensagem real do grupo Ofertas Gamer (27/10)", () => {
     expect(parsed.titleScore).toBeGreaterThanOrEqual(2);
     expect(parsed.priceCents).toBe(8900);
     expect(parsed.links[0]).toBe("https://link.amazon/B0cI4u3lZ");
+  });
+});
+
+describe("imagem da mensagem do WhatsApp", () => {
+  const base = { messageTimestamp: 1_700_000_000_000, text: "oferta https://amzn.to/x" };
+  it("guarda o id só quando a mensagem tem imagem", () => {
+    const [img] = groupPosts([{ ...base, messageType: "ImageMessage", messageid: "3EB0ABC", id: "5511:3EB0ABC" }]);
+    expect(img.mediaId).toBe("3EB0ABC");
+    const [viaContent] = groupPosts([{ ...base, content: { imageMessage: {} }, id: "long-id" }]);
+    expect(viaContent.mediaId).toBe("long-id");
+    const [txt] = groupPosts([{ ...base, messageType: "Conversation", messageid: "3EB0DEF" }]);
+    expect(txt.mediaId).toBeUndefined();
+  });
+  it("parseMediaResponse entende os nomes de campo e data: URL", () => {
+    expect(parseMediaResponse({ fileURL: "https://x/a.jpg", mimetype: "image/jpeg" })).toEqual({ url: "https://x/a.jpg", mimetype: "image/jpeg" });
+    expect(parseMediaResponse({ base64Data: "QUJD", mimetype: "image/png" })).toEqual({ base64: "QUJD", mimetype: "image/png" });
+    expect(parseMediaResponse({ base64: "QUJD" })).toEqual({ base64: "QUJD" });
+    expect(parseMediaResponse({ data: "QUJD" }).base64).toBe("QUJD");
+    expect(parseMediaResponse({ fileURL: "data:image/webp;base64,QUJD" })).toEqual({ base64: "QUJD", mimetype: "image/webp" });
+    expect(parseMediaResponse(null)).toEqual({});
   });
 });
